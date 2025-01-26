@@ -1,11 +1,12 @@
 # Introduction
-N/A
+
+A simple websocket middleware service to act as the intermediary between a web application
+and the Blink Smart Security Camera livestream API.
 
 # Usage
-N/A
+
+TODO
 
 # Requirements & Dependencies
-N/A
 
-# Previews
-![preview image](https://via.placeholder.com/350x240)
+TODO
