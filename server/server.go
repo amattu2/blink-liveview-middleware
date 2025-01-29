@@ -1,14 +1,12 @@
-package main
+package server
 
 import (
-	"flag"
 	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
 )
 
-var address = flag.String("address", ":8080", "HTTP server address")
 var upgrader = websocket.Upgrader{}
 
 func echo(w http.ResponseWriter, r *http.Request) {
@@ -32,8 +30,7 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func main() {
-	flag.Parse()
+func Run(address *string) {
 	log.SetFlags(0)
 
 	http.HandleFunc("/liveview", echo)
