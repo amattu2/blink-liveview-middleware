@@ -27,6 +27,24 @@ func GetApiUrl(region string) string {
 	return fmt.Sprintf("https://rest-%s.immedia-semi.com", region)
 }
 
+// GetLiveviewPath returns the liveview path based on the device type
+// deviceType: the type of device to get the liveview path for
+//
+// Example: GetLiveviewPath("camera") = "%s/api/v5/accounts/%d/networks/%d/cameras/%d/liveview"
+func GetLiveviewPath(deviceType string) (string, error) {
+	switch deviceType {
+	case "camera":
+		return "%s/api/v5/accounts/%d/networks/%d/cameras/%d/liveview", nil
+	case "owl":
+		return "%s/api/v2/accounts/%d/networks/%d/owls/%d/liveview", nil
+	case "doorbell":
+	case "lotus":
+		return "%s/api/v2/accounts/%d/networks/%d/doorbells/%d/liveview", nil
+	}
+
+	return "", fmt.Errorf("unknown device type: %s", deviceType)
+}
+
 // SetRequestHeaders appends the required headers to the request
 // req: the request to append headers to
 // token: the token to use for the request
@@ -115,7 +133,7 @@ func PollCommand(ctx context.Context, url string, token string, pollInterval int
 
 			client := &http.Client{Timeout: time.Second * 10}
 			resp, err := client.Do(req)
-			if resp.StatusCode != http.StatusAccepted || err != nil {
+			if resp.StatusCode != http.StatusOK || err != nil {
 				log.Println("Error polling API", resp.StatusCode, err)
 				return
 			}

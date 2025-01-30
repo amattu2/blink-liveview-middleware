@@ -14,7 +14,13 @@ See the following sections for more information on how to use each entry point.
 ## CLI Usage
 
 ```bash
-go run cmd/cli/main.go --region=<region> --token=<api token> --account-id=<account id> --network-id=<network id> --camera-id=<camera id>
+go run cmd/cli/main.go \
+  --region=<region> \
+  --token=<api token> \
+  --device-type=<lotus|owl|doorbell|etc> \
+  --account-id=<account id> \
+  --network-id=<network id> \
+  --camera-id=<camera id>
 ```
 
 ## HTTP Server Usage

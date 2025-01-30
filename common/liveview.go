@@ -106,16 +106,16 @@ import (
 // 	}
 // }
 
-func Livestream(baseUrl string, token string, accountId int, networkId int, cameraId int) {
-	// DEBUG: Log details
-	fmt.Println("Base URL:", baseUrl)
-	fmt.Println("Token:", token)
-	fmt.Println("Account ID:", accountId)
-	fmt.Println("Network ID:", networkId)
-	fmt.Println("Camera ID:", cameraId)
-
+func Livestream(region string, token string, deviceType string, accountId int, networkId int, cameraId int) {
 	// Tell Blink we want to start a liveview session
-	liveViewUrl := fmt.Sprintf("%s/api/v5/accounts/%d/networks/%d/cameras/%d/liveview", baseUrl, accountId, networkId, cameraId)
+	liveViewPath, err := GetLiveviewPath(deviceType)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	baseUrl := GetApiUrl(region)
+	liveViewUrl := fmt.Sprintf(liveViewPath, baseUrl, accountId, networkId, cameraId)
 	liveview, err := BeginLiveview(liveViewUrl, token)
 	if err != nil {
 		fmt.Println(err)
@@ -133,16 +133,7 @@ func Livestream(baseUrl string, token string, accountId int, networkId int, came
 	defer cancelCtx()
 
 	// Stop the liveview session
-	defer func() {
-		err := StopLiveview(fmt.Sprintf("%s/network/%d/command/%d/done", baseUrl, networkId, liveview.CommandId), token)
-		if err != nil {
-			fmt.Println("Error stopping liveview:", err)
-		}
-	}()
-
-	// DEBUGGING:
-	fmt.Println("Liveview server:", liveview.Server)
-	fmt.Println("Liveview command ID:", liveview.CommandId)
+	defer StopLiveview(fmt.Sprintf("%s/network/%d/command/%d/done", baseUrl, networkId, liveview.CommandId), token)
 
 	// Connect to the liveview server
 	connection, err := ParseConnectionString(liveview.Server)
@@ -151,9 +142,7 @@ func Livestream(baseUrl string, token string, accountId int, networkId int, came
 		return
 	}
 
-	fmt.Println("Host:", connection.Host)
-	fmt.Println("ConnID:", connection.ConnectionId)
-	fmt.Println("ClientID:", connection.ClientId)
-
+	fmt.Println("Connecting to", connection.Host, connection.Port)
 	// tcpStream(*connection)
+	defer fmt.Println("Disconnected")
 }
