@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -42,7 +41,7 @@ func GetLiveviewPath(deviceType string) (string, error) {
 		return "%s/api/v2/accounts/%d/networks/%d/doorbells/%d/liveview", nil
 	}
 
-	return "", fmt.Errorf("unknown device type: %s", deviceType)
+	return "", fmt.Errorf("cannot build path for unknown device type: %s", deviceType)
 }
 
 // SetRequestHeaders appends the required headers to the request
@@ -71,18 +70,17 @@ type ConnectionDetails struct {
 //
 // Example: ParseConnectionString("TODO")
 func ParseConnectionString(server string) (*ConnectionDetails, error) {
-	if server == "" {
-		return nil, fmt.Errorf("invalid connection URL")
-	}
-
 	parsedUrl, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	host := strings.Split(strings.Split(server, "/")[2], ":")
-	if len(host) <= 1 || host[0] == "" {
+	if parsedUrl.Hostname() == "" {
 		return nil, fmt.Errorf("invalid host")
+	}
+
+	if parsedUrl.Port() != "443" {
+		return nil, fmt.Errorf("unexpected port %s. Expecting 443", parsedUrl.Port())
 	}
 
 	connID := strings.Split(strings.Split(server, "/")[len(strings.Split(server, "/"))-1], "_")
@@ -96,8 +94,8 @@ func ParseConnectionString(server string) (*ConnectionDetails, error) {
 	}
 
 	return &ConnectionDetails{
-		Host:         host[0],
-		Port:         "443",
+		Host:         parsedUrl.Hostname(),
+		Port:         parsedUrl.Port(),
 		ClientId:     clientID,
 		ConnectionId: connID[0],
 	}, nil
@@ -117,16 +115,15 @@ type CommandResponse struct {
 // pollInterval: the interval to wait between polls in seconds
 //
 // Example: go PollCommand("https://example.com", "api-token-here", 10)
-func PollCommand(ctx context.Context, url string, token string, pollInterval int) {
+func PollCommand(ctx context.Context, url string, token string, pollInterval int) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
-				log.Println(err)
-				return
+				return err
 			}
 
 			SetRequestHeaders(req, token)
@@ -134,26 +131,23 @@ func PollCommand(ctx context.Context, url string, token string, pollInterval int
 			client := &http.Client{Timeout: time.Second * 10}
 			resp, err := client.Do(req)
 			if resp.StatusCode != http.StatusOK || err != nil {
-				log.Println("Error polling API", resp.StatusCode, err)
-				return
+				return fmt.Errorf("error polling command. HTTP Status Code %d", resp.StatusCode)
 			}
 			defer resp.Body.Close()
 
 			body, err := io.ReadAll(resp.Body)
 			result := CommandResponse{}
 			if err != nil {
-				log.Println(err)
-				return
+				return err
 			}
 
 			err = json.Unmarshal(body, &result)
 			if err != nil {
-				log.Println(err)
-				return
+				return err
 			}
 
 			if result.Complete {
-				return
+				return fmt.Errorf("command marked as complete. Cannot poll further")
 			}
 
 			time.Sleep(time.Duration(pollInterval) * time.Second)
@@ -191,7 +185,7 @@ func BeginLiveview(url string, token string) (*LiveviewResponse, error) {
 	client := &http.Client{Timeout: time.Second * 10}
 	resp, err := client.Do(req)
 	if resp.StatusCode != http.StatusOK || err != nil {
-		return nil, fmt.Errorf("error starting liveview. Status Code %d", resp.StatusCode)
+		return nil, fmt.Errorf("error starting liveview. HTTP Status Code %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
 
@@ -225,7 +219,7 @@ func StopLiveview(url string, token string) error {
 	client := &http.Client{Timeout: time.Second * 10}
 	resp, err := client.Do(req)
 	if resp.StatusCode != http.StatusOK || err != nil {
-		return fmt.Errorf("unable to stop liveview. Status Code %d", resp.StatusCode)
+		return fmt.Errorf("cannot stop liveview. HTTP Status Code %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
 
@@ -241,7 +235,7 @@ func StopLiveview(url string, token string) error {
 	}
 
 	if result.Code != 902 {
-		return fmt.Errorf("unable to stop liveview. Code %d with message %s", result.Code, result.Message)
+		return fmt.Errorf("cannot stop liveview. API Code %d with message %s", result.Code, result.Message)
 	}
 
 	return nil

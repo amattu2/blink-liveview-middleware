@@ -115,34 +115,33 @@ func Livestream(region string, token string, deviceType string, accountId int, n
 	}
 
 	baseUrl := GetApiUrl(region)
-	liveViewUrl := fmt.Sprintf(liveViewPath, baseUrl, accountId, networkId, cameraId)
-	liveview, err := BeginLiveview(liveViewUrl, token)
+	liveview, err := BeginLiveview(fmt.Sprintf(liveViewPath, baseUrl, accountId, networkId, cameraId), token)
 	if err != nil {
 		fmt.Println(err)
 		return
-	}
-	if liveview == nil || liveview.CommandId == 0 {
-		fmt.Println("Error starting liveview: invalid response", liveview)
+	} else if liveview == nil || liveview.CommandId == 0 {
+		fmt.Println("Error sending liveview command", liveview)
 		return
 	}
 
 	// Poll the liveview command to keep the connection alive
 	pollCtx, cancelCtx := context.WithCancel(context.Background())
-	pollCommandUrl := fmt.Sprintf("%s/network/%d/command/%d", baseUrl, networkId, liveview.CommandId)
-	go PollCommand(pollCtx, pollCommandUrl, token, liveview.PollingInterval)
+	go PollCommand(pollCtx, fmt.Sprintf("%s/network/%d/command/%d", baseUrl, networkId, liveview.CommandId), token, liveview.PollingInterval)
 	defer cancelCtx()
 
 	// Stop the liveview session
 	defer StopLiveview(fmt.Sprintf("%s/network/%d/command/%d/done", baseUrl, networkId, liveview.CommandId), token)
 
 	// Connect to the liveview server
-	connection, err := ParseConnectionString(liveview.Server)
+	connectionDetails, err := ParseConnectionString(liveview.Server)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	fmt.Println("Connecting to", connection.Host, connection.Port)
+	// TODO: Implement TCP streaming
+	fmt.Printf("Connecting to %s:%s\n", connectionDetails.Host, connectionDetails.Port)
 	// tcpStream(*connection)
+
 	defer fmt.Println("Disconnected")
 }
