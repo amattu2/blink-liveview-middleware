@@ -116,11 +116,14 @@ type CommandResponse struct {
 //
 // Example: go PollCommand("https://example.com", "api-token-here", 10)
 func PollCommand(ctx context.Context, url string, token string, pollInterval int) error {
+	ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		default:
+		case <-ticker.C:
 			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
 				return err
@@ -149,8 +152,6 @@ func PollCommand(ctx context.Context, url string, token string, pollInterval int
 			if result.Complete {
 				return fmt.Errorf("command marked as complete. Cannot poll further")
 			}
-
-			time.Sleep(time.Duration(pollInterval) * time.Second)
 		}
 	}
 }
