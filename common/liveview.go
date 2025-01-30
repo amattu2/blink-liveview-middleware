@@ -2,109 +2,139 @@ package common
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
+	"net"
+	"os/exec"
+	"time"
 )
 
-// func tcpStream(connInfo ConnectionDetails) {
-// 	clientIDBytes := make([]byte, 4)
-// 	binary.BigEndian.PutUint32(clientIDBytes, uint32(connInfo.ClientId))
+func tcpStream(connInfo ConnectionDetails) {
+	fmt.Printf("Connecting to %s:%s\n", connInfo.Host, connInfo.Port)
 
-// 	connIDBytes := []byte(connInfo.ConnectionId)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", connInfo.Host, connInfo.Port))
+	if err != nil {
+		fmt.Println("Error connecting:", err)
+		return
+	}
+	defer conn.Close()
 
-// 	connHeader := append([]byte{
-// 		0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 	}, clientIDBytes...)
+	client := tls.Client(conn, &tls.Config{
+		InsecureSkipVerify: true,
+		ServerName:         connInfo.Host,
+	})
 
-// 	connHeader = append(connHeader, []byte{
-// 		0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 		0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
-// 	}...)
+	err = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if err != nil {
+		fmt.Println("Error setting read deadline:", err)
+		return
+	}
+	err = conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+	if err != nil {
+		fmt.Println("Error setting write deadline:", err)
+		return
+	}
 
-// 	connHeader = append(connHeader, connIDBytes...)
-// 	connHeader = append(connHeader, []byte{
-// 		0x00, 0x00, 0x00, 0x01, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 	}...)
+	err = client.Handshake()
+	if err != nil {
+		fmt.Println("TLS handshake failed:", err)
+		return
+	} else {
+		fmt.Println("TLS handshake successful")
+	}
+	defer client.Close()
 
-// 	keepAlive := []byte{
-// 		0x12, 0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
-// 		0x00,
-// 	}
+	err = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if err != nil {
+		fmt.Println("Error setting read deadline:", err)
+		return
+	}
+	err = conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+	if err != nil {
+		fmt.Println("Error setting write deadline:", err)
+		return
+	}
 
-// 	addr := fmt.Sprintf("%s:%s", connInfo.Host, connInfo.Port)
-// 	conn, err := net.Dial("tcp", addr)
-// 	if err != nil {
-// 		fmt.Println("Error connecting:", err)
-// 		return
-// 	}
-// 	defer conn.Close()
+	start := time.Now()
+	// TODO: I think the header is invalid and forces the connection to close
+	_, err = client.Write(GetTCPConnectionHeader(connInfo.ConnectionId, connInfo.ClientId))
+	if err != nil {
+		fmt.Println("Error sending connection header:", err)
+		return
+	} else {
+		fmt.Println("Connection header sent")
+	}
 
-// 	config := &tls.Config{
-// 		InsecureSkipVerify: true,
-// 		ServerName:         connInfo.Host,
-// 	}
+	ffplayCmd := exec.Command("ffplay", "-f", "mpegts", "-err_detect", "ignore_err", "-")
+	ffplayIn, err := ffplayCmd.StdinPipe()
+	if err != nil {
+		fmt.Println("Error creating ffplay stdin pipe:", err)
+		return
+	} else {
+		fmt.Println("Created ffplay stdin pipe")
+	}
 
-// 	ssock := tls.Client(conn, config)
-// 	err = ssock.Handshake()
-// 	if err != nil {
-// 		fmt.Println("TLS handshake failed:", err)
-// 		return
-// 	}
-// 	defer ssock.Close()
+	err = ffplayCmd.Start()
+	if err != nil {
+		fmt.Println("Error starting ffplay:", err)
+		return
+	} else {
+		fmt.Println("Started ffplay")
+	}
+	defer ffplayCmd.Process.Kill()
 
-// 	start := time.Now()
-// 	_, err = ssock.Write(connHeader)
-// 	if err != nil {
-// 		fmt.Println("Error sending connection header:", err)
-// 		return
-// 	}
+	buf := make([]byte, 64)
+	for {
+		fmt.Println("Reading from socket...")
 
-// 	ffplayCmd := exec.Command("ffplay", "-f", "mpegts", "-err_detect", "ignore_err", "-")
-// 	ffplayIn, err := ffplayCmd.StdinPipe()
-// 	if err != nil {
-// 		fmt.Println("Error creating ffplay stdin pipe:", err)
-// 		return
-// 	}
+		err = client.SetReadDeadline(time.Now().Add(3 * time.Second))
+		if err != nil {
+			fmt.Println("Error setting read deadline:", err)
+			break
+		}
 
-// 	err = ffplayCmd.Start()
-// 	if err != nil {
-// 		fmt.Println("Error starting ffplay:", err)
-// 		return
-// 	}
-// 	defer ffplayCmd.Process.Kill()
+		n, err := client.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("Socket closed by remote host")
+				break
+			}
+			fmt.Println("Error reading from socket:", err)
+			break
+		}
 
-// 	buf := make([]byte, 64)
-// 	for {
-// 		n, err := ssock.Read(buf)
-// 		if err != nil {
-// 			if err == io.EOF {
-// 				break
-// 			}
-// 			fmt.Println("Error reading from socket:", err)
-// 			return
-// 		}
+		if n == 0 {
+			fmt.Println("No data read from socket")
+			continue
+		}
 
-// 		_, err = ffplayIn.Write(buf[:n])
-// 		if err != nil {
-// 			fmt.Println("Error writing to ffplay stdin:", err)
-// 			return
-// 		}
+		fmt.Printf("Read %d bytes from socket\n", n)
 
-// 		if time.Since(start) > time.Second {
-// 			_, err = ssock.Write(keepAlive)
-// 			if err != nil {
-// 				fmt.Println("Error sending keep-alive:", err)
-// 				return
-// 			}
-// 			start = time.Now()
-// 		}
-// 	}
-// }
+		_, err = ffplayIn.Write(buf[:n])
+		if err != nil {
+			fmt.Println("Error writing to ffplay stdin:", err)
+			break
+		}
+
+		if time.Since(start) > time.Second {
+			_, err = client.Write(FRAMES_KEEPALIVE)
+			if err != nil {
+				fmt.Println("Error sending keep-alive:", err)
+				break
+			}
+			start = time.Now()
+		}
+	}
+
+	ffplayIn.Close()
+
+	if err := ffplayCmd.Wait(); err != nil {
+		fmt.Println("Error waiting for ffplay:", err)
+	}
+
+	fmt.Println("Done...")
+}
 
 func Livestream(region string, token string, deviceType string, accountId int, networkId int, cameraId int) {
 	// Tell Blink we want to start a liveview session
@@ -139,9 +169,5 @@ func Livestream(region string, token string, deviceType string, accountId int, n
 		return
 	}
 
-	// TODO: Implement TCP streaming
-	fmt.Printf("Connecting to %s:%s\n", connectionDetails.Host, connectionDetails.Port)
-	// tcpStream(*connection)
-
-	defer fmt.Println("Disconnected")
+	tcpStream(*connectionDetails)
 }
