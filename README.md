@@ -3,6 +3,8 @@
 A simple websocket middleware service to act as the intermediary between a web application
 and the Blink Smart Security Camera livestream API.
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/amattu2/blink-liveview-middleware)](https://goreportcard.com/report/github.com/amattu2/blink-liveview-middleware)
+
 # Usage
 
 There are two entry points for this service, the CLI and the HTTP (websocket)

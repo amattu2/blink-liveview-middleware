@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  push:
+    branches: ["master"]
+    paths-ignore:
+      - ".github/**"
+  pull_request:
+    branches: ["master"]
+    paths-ignore:
+      - ".github/**"
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: [1.23.x]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Compile Application
+        run: go build -v ./...
+        working-directory: ./
+
+      # Run tests
+      - run: go version
+      - run: go test -v ./...
+      - run: go test -race ./...
