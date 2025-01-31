@@ -1,16 +1,23 @@
 package common
 
 import (
-	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os/exec"
+	"syscall"
 	"time"
 )
 
-func tcpStream(connInfo ConnectionDetails) {
+// TCPStream connects to the liveview server using a TCP connection
+// TODO: Support multiple output methods (e.g. ffmpeg, ffplay, etc.)
+//
+// connInfo: the connection details to use to connect to the liveview server
+//
+// Example: TCPStream(ConnectionDetails{Host: "example.com", Port: "443", ConnectionId: 1234, ClientId: 5678})
+func TCPStream(connInfo ConnectionDetails) {
 	fmt.Printf("Connecting to %s:%s\n", connInfo.Host, connInfo.Port)
 
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", connInfo.Host, connInfo.Port))
@@ -56,16 +63,6 @@ func tcpStream(connInfo ConnectionDetails) {
 		return
 	}
 
-	start := time.Now()
-	// TODO: I think the header is invalid and forces the connection to close
-	_, err = client.Write(GetTCPConnectionHeader(connInfo.ConnectionId, connInfo.ClientId))
-	if err != nil {
-		fmt.Println("Error sending connection header:", err)
-		return
-	} else {
-		fmt.Println("Connection header sent")
-	}
-
 	ffplayCmd := exec.Command("ffplay", "-f", "mpegts", "-err_detect", "ignore_err", "-")
 	ffplayIn, err := ffplayCmd.StdinPipe()
 	if err != nil {
@@ -84,11 +81,20 @@ func tcpStream(connInfo ConnectionDetails) {
 	}
 	defer ffplayCmd.Process.Kill()
 
-	buf := make([]byte, 64)
+	start := time.Now()
+	_, err = client.Write(GetTCPAuthFrame(connInfo.ConnectionId, connInfo.ClientId))
+	if err != nil {
+		fmt.Println("Error sending connection header:", err)
+		return
+	} else {
+		fmt.Println("Connection header sent")
+	}
+
+	buf := make([]byte, 1024)
 	for {
 		fmt.Println("Reading from socket...")
 
-		err = client.SetReadDeadline(time.Now().Add(3 * time.Second))
+		err = client.SetReadDeadline(time.Now().Add(5 * time.Second))
 		if err != nil {
 			fmt.Println("Error setting read deadline:", err)
 			break
@@ -96,11 +102,15 @@ func tcpStream(connInfo ConnectionDetails) {
 
 		n, err := client.Read(buf)
 		if err != nil {
-			if err == io.EOF {
-				fmt.Println("Socket closed by remote host")
-				break
+			if errors.Is(err, io.EOF) {
+				fmt.Println("Connection closed gracefully by peer")
+			} else if errors.Is(err, syscall.ECONNRESET) {
+				fmt.Println("Connection reset by peer (ECONNRESET)")
+			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				fmt.Println("Read timeout, connection might be closed")
+			} else {
+				fmt.Println("Other read error:", err)
 			}
-			fmt.Println("Error reading from socket:", err)
 			break
 		}
 
@@ -133,41 +143,5 @@ func tcpStream(connInfo ConnectionDetails) {
 		fmt.Println("Error waiting for ffplay:", err)
 	}
 
-	fmt.Println("Done...")
-}
-
-func Livestream(region string, token string, deviceType string, accountId int, networkId int, cameraId int) {
-	// Tell Blink we want to start a liveview session
-	liveViewPath, err := GetLiveviewPath(deviceType)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	baseUrl := GetApiUrl(region)
-	liveview, err := BeginLiveview(fmt.Sprintf(liveViewPath, baseUrl, accountId, networkId, cameraId), token)
-	if err != nil {
-		fmt.Println(err)
-		return
-	} else if liveview == nil || liveview.CommandId == 0 {
-		fmt.Println("Error sending liveview command", liveview)
-		return
-	}
-
-	// Poll the liveview command to keep the connection alive
-	pollCtx, cancelCtx := context.WithCancel(context.Background())
-	go PollCommand(pollCtx, fmt.Sprintf("%s/network/%d/command/%d", baseUrl, networkId, liveview.CommandId), token, liveview.PollingInterval)
-	defer cancelCtx()
-
-	// Stop the liveview session
-	defer StopLiveview(fmt.Sprintf("%s/network/%d/command/%d/done", baseUrl, networkId, liveview.CommandId), token)
-
-	// Connect to the liveview server
-	connectionDetails, err := ParseConnectionString(liveview.Server)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	tcpStream(*connectionDetails)
+	fmt.Println("Stream ended...")
 }

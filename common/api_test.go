@@ -11,18 +11,6 @@ import (
 	"github.com/go-playground/assert/v2"
 )
 
-func TestGetURLWithRegion(t *testing.T) {
-	r := common.GetApiUrl("u014")
-
-	assert.Equal(t, "https://rest-u014.immedia-semi.com", r)
-}
-
-func TestGetURLWithoutRegion(t *testing.T) {
-	r := common.GetApiUrl("")
-
-	assert.Equal(t, "https://rest-prod.immedia-semi.com", r)
-}
-
 func TestSetRequestHeaders(t *testing.T) {
 	// Create a new request
 	req, _ := http.NewRequest("GET", "https://example.com", nil)
@@ -37,41 +25,6 @@ func TestSetRequestHeaders(t *testing.T) {
 	assert.Equal(t, "America/New_York", req.Header.Get("x-blink-time-zone"))
 	assert.Equal(t, "xyz-auth-token", req.Header.Get("token-auth"))
 	assert.Equal(t, "application/json; charset=UTF-8", req.Header.Get("content-type"))
-}
-
-func GetLiveviewPathCamera(t *testing.T) {
-	path, err := common.GetLiveviewPath("camera")
-
-	assert.Equal(t, "%s/api/v5/accounts/%d/networks/%d/cameras/%d/liveview", path)
-	assert.Equal(t, err, nil)
-}
-
-func GetLiveviewPathOwl(t *testing.T) {
-	path, err := common.GetLiveviewPath("owl")
-
-	assert.Equal(t, "%s/api/v2/accounts/%d/networks/%d/owls/%d/liveview", path)
-	assert.Equal(t, err, nil)
-}
-
-func GetLiveviewPathDoorbell(t *testing.T) {
-	path, err := common.GetLiveviewPath("doorbell")
-
-	assert.Equal(t, "", path)
-	assert.NotEqual(t, err, nil)
-}
-
-func GetLiveviewPathLotus(t *testing.T) {
-	path, err := common.GetLiveviewPath("lotus")
-
-	assert.Equal(t, "%s/api/v2/accounts/%d/networks/%d/doorbells/%d/liveview", path)
-	assert.Equal(t, err, nil)
-}
-
-func GetLiveviewPathUnknown(t *testing.T) {
-	path, err := common.GetLiveviewPath("unknown")
-
-	assert.Equal(t, "", path)
-	assert.NotEqual(t, err, nil)
 }
 
 func TestPollCommandCancel(t *testing.T) {
