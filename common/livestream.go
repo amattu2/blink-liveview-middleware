@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 )
@@ -29,17 +30,17 @@ func Livestream(region string, token string, deviceType string, accountId int, n
 	baseUrl := GetApiUrl(region)
 	liveViewPath, err := GetLiveviewPath(deviceType)
 	if err != nil {
-		fmt.Println(err)
+		log.Println("Error getting liveview path", err)
 		return
 	}
 
 	// Tell Blink we want to start a liveview session
 	resp, err := BeginLiveview(fmt.Sprintf(liveViewPath, baseUrl, accountId, networkId, cameraId), token)
 	if err != nil {
-		fmt.Println(err)
+		log.Println("Error starting liveview session", err)
 		return
 	} else if resp == nil || resp.CommandId == 0 {
-		fmt.Println("Error sending liveview command", resp)
+		log.Println("Error sending liveview command", resp)
 		return
 	}
 
@@ -52,16 +53,19 @@ func Livestream(region string, token string, deviceType string, accountId int, n
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		fmt.Println("SIGINT: Stopping...")
+		log.Println("Received SIGINT. Stopping liveview session.")
 		cancelCtx()
 	}()
 
-	// Connect to the liveview server
+	// Get the connection details
 	connectionDetails, err := ParseConnectionString(resp.Server)
 	if err != nil {
-		fmt.Println(err)
+		log.Println("Error parsing connection string", err)
 		return
 	}
 
-	TCPStream(ctx, *connectionDetails)
+	// Connect to the liveview server
+	if err := TCPStream(ctx, *connectionDetails); err != nil {
+		log.Println("TCPStream error", err)
+	}
 }
