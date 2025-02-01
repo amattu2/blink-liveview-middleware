@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 
-<head>
-  <meta charset="utf-8">
-  <title>Blink Liveview Stream</title>
+<head></head>
+<meta charset="utf-8">
+<title>Blink Liveview Stream</title>
 </head>
 
 <body>
@@ -13,8 +13,10 @@
         <form>
           <button id="open">Open</button>
           <button id="close">Close</button>
-          <p><input id="input" type="text" value="Hello world!">
+          <p>
+            <input id="input" type="text" value="Hello world!">
             <button id="send">Send</button>
+          </p>
         </form>
       </td>
       <td valign="top" width="50%">
@@ -73,7 +75,6 @@
         ws.close();
         return false;
       };
-
     });
   </script>
 </body>
