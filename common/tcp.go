@@ -50,17 +50,16 @@ func TCPStream(connInfo ConnectionDetails) {
 	defer ffplayCmd.Process.Kill()
 
 	start := time.Now()
-	if n, err := client.Write(GetTCPAuthFrame(connInfo.ConnectionId, connInfo.ClientId)); err != nil {
-		fmt.Println("Error sending connection header:", err)
-		return
-	} else {
-		fmt.Printf("Sent %d bytes to server\n", n)
+	frames := GetTCPAuthFrames(connInfo.ConnectionId, connInfo.ClientId)
+	for _, frame := range frames {
+		if _, err := client.Write(frame); err != nil {
+			fmt.Println("Error sending connection header:", err)
+			return
+		}
 	}
 
 	buf := make([]byte, 64)
 	for {
-		fmt.Println("Waiting for data from socket...")
-
 		if err := client.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
 			fmt.Println("Error setting read deadline:", err)
 			break
@@ -79,13 +78,6 @@ func TCPStream(connInfo ConnectionDetails) {
 			}
 			break
 		}
-
-		if n == 0 {
-			fmt.Println("No data read from socket")
-			continue
-		}
-
-		fmt.Printf("Read %d bytes from socket\n", n)
 
 		if _, err := inputPipe.Write(buf[:n]); err != nil {
 			fmt.Println("Error writing to ffplay stdin:", err)
@@ -126,7 +118,7 @@ func sendPing(client *tls.Conn) (err error) {
 	if n, err := client.Write(FRAMES_KEEPALIVE); err != nil {
 		return fmt.Errorf("error sending keep-alive: %w", err)
 	} else {
-		fmt.Printf("Sent %d bytes to server\n", n)
+		fmt.Printf("[keep alive] Sent %d bytes to server\n", n)
 	}
 
 	return nil
