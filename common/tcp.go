@@ -42,8 +42,7 @@ func TCPStream(connInfo ConnectionDetails) {
 		return
 	}
 
-	err = ffplayCmd.Start()
-	if err != nil {
+	if err := ffplayCmd.Start(); err != nil {
 		fmt.Println("Error starting ffplay:", err)
 		return
 	}
@@ -60,7 +59,7 @@ func TCPStream(connInfo ConnectionDetails) {
 
 	buf := make([]byte, 64)
 	for {
-		if err := client.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		if err := client.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 			fmt.Println("Error setting read deadline:", err)
 			break
 		}
@@ -111,14 +110,12 @@ func TCPStream(connInfo ConnectionDetails) {
 //
 // Example: sendPing(client) = nil
 func sendPing(client *tls.Conn) (err error) {
-	if err := client.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
+	if err := client.SetWriteDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		return fmt.Errorf("error setting write deadline: %w", err)
 	}
 
-	if n, err := client.Write(FRAMES_KEEPALIVE); err != nil {
+	if _, err := client.Write(FRAMES_KEEPALIVE); err != nil {
 		return fmt.Errorf("error sending keep-alive: %w", err)
-	} else {
-		fmt.Printf("[keep alive] Sent %d bytes to server\n", n)
 	}
 
 	return nil
