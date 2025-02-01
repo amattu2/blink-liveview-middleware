@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -16,10 +17,12 @@ import (
 // TODO: Support audio I/O
 // TODO: Support command I/O (e.g. PTZ commands)
 //
+// ctx: the context to use for the stream
+//
 // connInfo: the connection details to use to connect to the liveview server
 //
-// Example: TCPStream(ConnectionDetails{Host: "example.com", Port: "443", ConnectionId: 1234, ClientId: 5678})
-func TCPStream(connInfo ConnectionDetails) {
+// Example: TCPStream(ctx, ConnectionDetails{Host: "example.com", Port: "443", ConnectionId: 1234, ClientId: 5678})
+func TCPStream(ctx context.Context, connInfo ConnectionDetails) {
 	fmt.Printf("Initializing stream to %s:%s\n", connInfo.Host, connInfo.Port)
 
 	client, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", connInfo.Host, connInfo.Port), &tls.Config{
@@ -58,40 +61,47 @@ func TCPStream(connInfo ConnectionDetails) {
 	}
 
 	buf := make([]byte, 64)
+stream:
 	for {
-		if err := client.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
-			fmt.Println("Error setting read deadline:", err)
-			break
-		}
-
-		n, err := client.Read(buf)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				fmt.Println("Connection closed gracefully by peer")
-			} else if errors.Is(err, syscall.ECONNRESET) {
-				fmt.Println("Connection reset by peer (ECONNRESET)")
-			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				fmt.Println("Read timeout, connection might be closed")
-			} else {
-				fmt.Println("Other read error:", err)
-			}
-			break
-		}
-
-		if _, err := inputPipe.Write(buf[:n]); err != nil {
-			fmt.Println("Error writing to ffplay stdin:", err)
-			break
-		}
-
-		// Send a keep-alive ping to the server
-		if time.Since(start) > time.Second {
-			if err := sendPing(client); err != nil {
-				fmt.Println("Error sending keep-alive:", err)
-				break
+		select {
+		case <-ctx.Done():
+			fmt.Println("Context cancelled, ending stream")
+			break stream
+		default:
+			if err := client.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+				fmt.Println("Error setting read deadline:", err)
+				break stream
 			}
 
-			// Reset the timer
-			start = time.Now()
+			n, err := client.Read(buf)
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					fmt.Println("Connection closed gracefully by peer")
+				} else if errors.Is(err, syscall.ECONNRESET) {
+					fmt.Println("Connection reset by peer (ECONNRESET)")
+				} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					fmt.Println("Read timeout, connection might be closed")
+				} else {
+					fmt.Println("Other read error:", err)
+				}
+				break stream
+			}
+
+			if _, err := inputPipe.Write(buf[:n]); err != nil {
+				fmt.Println("Error writing to ffplay stdin:", err)
+				break stream
+			}
+
+			// Send a keep-alive ping to the server
+			if time.Since(start) > time.Second {
+				if err := sendPing(client); err != nil {
+					fmt.Println("Error sending keep-alive:", err)
+					break stream
+				}
+
+				// Reset the timer
+				start = time.Now()
+			}
 		}
 	}
 

@@ -3,6 +3,8 @@ package common
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
 )
 
 // Livestream coordinates the liveview process for a Blink (Immedia Semiconductor) camera.
@@ -42,10 +44,17 @@ func Livestream(region string, token string, deviceType string, accountId int, n
 	}
 
 	// Poll the liveview command to keep the connection alive
-	pollCtx, cancelCtx := context.WithCancel(context.Background())
-	go PollCommand(pollCtx, fmt.Sprintf("%s/network/%d/command/%d", baseUrl, networkId, resp.CommandId), token, resp.PollingInterval)
-	defer cancelCtx()
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	go PollCommand(ctx, fmt.Sprintf("%s/network/%d/command/%d", baseUrl, networkId, resp.CommandId), token, resp.PollingInterval)
 	defer StopCommand(fmt.Sprintf("%s/network/%d/command/%d/done", baseUrl, networkId, resp.CommandId), token)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		fmt.Println("SIGINT: Stopping...")
+		cancelCtx()
+	}()
 
 	// Connect to the liveview server
 	connectionDetails, err := ParseConnectionString(resp.Server)
@@ -54,5 +63,5 @@ func Livestream(region string, token string, deviceType string, accountId int, n
 		return
 	}
 
-	TCPStream(*connectionDetails)
+	TCPStream(ctx, *connectionDetails)
 }
