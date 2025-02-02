@@ -41,13 +41,6 @@ func GetLiveviewPath(deviceType string) (string, error) {
 	return "", fmt.Errorf("cannot build path for unknown device type: %s", deviceType)
 }
 
-type ConnectionDetails struct {
-	Host         string
-	Port         string
-	ClientId     int
-	ConnectionId string
-}
-
 // ParseConnectionString parses the connection string to extract the connection details
 //
 // url: the connection string to parse

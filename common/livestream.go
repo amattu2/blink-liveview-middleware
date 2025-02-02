@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 )
 
@@ -23,7 +24,8 @@ type AccountDetails struct {
 
 // Livestream coordinates the liveview process for a Blink (Immedia Semiconductor) camera.
 // It starts a liveview session, polls the liveview command to keep the connection alive, and connects to the liveview server.
-// Returns an error if any of the steps fail.
+// Returns an error if any of the steps fail. The connection is closed when the context is cancelled.
+// The io.Writer must be closed by the caller when the stream is finished.
 //
 // Refer to TCPStream for the connection process details and output methods.
 //
@@ -31,8 +33,10 @@ type AccountDetails struct {
 //
 // account: AccountDetails struct containing the necessary information to start a liveview session
 //
+// writer: the pipe to write the stream data to
+//
 // Example: Livestream("u011", "example_token", "camera", 1234, 5678, 9012) -> nil
-func Livestream(ctx context.Context, account AccountDetails) error {
+func Livestream(ctx context.Context, account AccountDetails, writer io.Writer) error {
 	baseUrl := GetApiUrl(account.Region)
 	liveViewPath, err := GetLiveviewPath(account.DeviceType)
 	if err != nil {
@@ -62,8 +66,8 @@ func Livestream(ctx context.Context, account AccountDetails) error {
 	}
 
 	// Connect to the liveview server
-	if err := TCPStream(ctx, *connectionDetails); err != nil {
-		log.Println("TCPStream error", err)
+	if err := TCPStream(ctx, *connectionDetails, writer); err != nil {
+		log.Println("TCPStream error:", err)
 		return err
 	}
 

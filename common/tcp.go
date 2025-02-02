@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"os/exec"
 	"syscall"
 	"time"
 )
@@ -19,9 +18,19 @@ var FRAMES_KEEPALIVE = []byte{
 	0x00,
 }
 
+type ConnectionDetails struct {
+	// The TCP host to connect to
+	Host string
+	// The TCP port to connect to
+	Port string
+	// The client ID to use for the connection
+	ClientId int
+	// The connection ID to use for the connection
+	ConnectionId string
+}
+
 // TCPStream connects to the liveview server using a TCP connection.
 // Returns an error if the connection fails or if the stream ends unexpectedly.
-// TODO: Support multiple output methods (e.g. ffmpeg, ffplay, etc.)
 // TODO: Support audio I/O
 // TODO: Support command I/O (e.g. PTZ commands)
 //
@@ -29,8 +38,10 @@ var FRAMES_KEEPALIVE = []byte{
 //
 // connInfo: the connection details to use to connect to the liveview server
 //
+// writer: the pipe to write the stream data to
+//
 // Example: TCPStream(ctx, ConnectionDetails{Host: "example.com", Port: "443", ConnectionId: 1234, ClientId: 5678})
-func TCPStream(ctx context.Context, connInfo ConnectionDetails) error {
+func TCPStream(ctx context.Context, connInfo ConnectionDetails, writer io.Writer) error {
 	log.Printf("Connecting to %s:%s\n", connInfo.Host, connInfo.Port)
 
 	client, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", connInfo.Host, connInfo.Port), &tls.Config{
@@ -44,17 +55,6 @@ func TCPStream(ctx context.Context, connInfo ConnectionDetails) error {
 		log.Println("Connected to", client.RemoteAddr())
 	}
 	defer client.Close()
-
-	ffplayCmd := exec.Command("ffplay", "-f", "mpegts", "-err_detect", "ignore_err", "-")
-	inputPipe, err := ffplayCmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("error creating ffplay stdin pipe: %w", err)
-	}
-
-	if err := ffplayCmd.Start(); err != nil {
-		return fmt.Errorf("error starting ffplay: %w", err)
-	}
-	defer ffplayCmd.Process.Kill()
 
 	start := time.Now()
 	frames := GetTCPAuthFrames(connInfo.ConnectionId, connInfo.ClientId)
@@ -92,8 +92,8 @@ stream:
 				break stream
 			}
 
-			if _, err := inputPipe.Write(buf[:n]); err != nil {
-				streamErr = fmt.Errorf("error writing to ffplay stdin: %w", err)
+			if _, err := writer.Write(buf[:n]); err != nil {
+				streamErr = fmt.Errorf("error writing to writer: %w", err)
 				break stream
 			}
 
@@ -108,11 +108,6 @@ stream:
 				start = time.Now()
 			}
 		}
-	}
-
-	inputPipe.Close()
-	if err := ffplayCmd.Wait(); err != nil {
-		return fmt.Errorf("error waiting for ffplay: %w", err)
 	}
 
 	return streamErr

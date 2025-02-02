@@ -3,6 +3,7 @@ package server
 import (
 	"blink-liveview-websocket/common"
 	"context"
+	"io"
 	"log"
 	"net/http"
 	"slices"
@@ -31,6 +32,8 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	camera_id, _ := strconv.Atoi(data["camera_id"].(string))
 	device_type := data["camera_type"].(string)
 
+	pipeReader, pipeWriter := io.Pipe()
+
 	// TODO: Pipe the output back to the client as binary data
 	// TODO: Kill the process when the client sends a stop command
 	go common.Livestream(ctx, common.AccountDetails{
@@ -40,7 +43,7 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 		AccountId:  account_id,
 		NetworkId:  network_id,
 		CameraId:   camera_id,
-	})
+	}, pipeWriter)
 
 	// Tell the client that the liveview has started
 	c.WriteJSON(MessageData{
@@ -50,8 +53,29 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 		},
 	})
 
+	// Forward messages from the pipe to the WebSocket connection
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := pipeReader.Read(buf)
+			if err != nil {
+				if err != io.EOF {
+					log.Printf("Error reading from pipe: %v", err)
+				}
+				break
+			}
+			if err := c.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
+				log.Printf("Error writing to WebSocket: %v", err)
+				break
+			}
+		}
+	}()
+
 	// Wait for the context to be cancelled
 	<-ctx.Done()
+
+	pipeReader.Close()
+	pipeWriter.Close()
 
 	// Tell the client that the liveview has stopped
 	c.WriteJSON(MessageData{

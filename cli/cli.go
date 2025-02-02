@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 )
 
@@ -40,6 +41,17 @@ func Run(region *string, token *string, deviceType *string, accountId *int, netw
 		os.Exit(1)
 	}
 
+	ffplayCmd := exec.Command("ffplay", "-f", "mpegts", "-err_detect", "ignore_err", "-")
+	inputPipe, err := ffplayCmd.StdinPipe()
+	if err != nil {
+		log.Println("error creating ffplay stdin pipe", err)
+	}
+
+	if err := ffplayCmd.Start(); err != nil {
+		log.Println("error starting ffplay", err)
+	}
+	defer ffplayCmd.Process.Kill()
+
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -56,5 +68,10 @@ func Run(region *string, token *string, deviceType *string, accountId *int, netw
 		AccountId:  *accountId,
 		NetworkId:  *networkId,
 		CameraId:   *cameraId,
-	})
+	}, inputPipe)
+
+	inputPipe.Close()
+	if err := ffplayCmd.Wait(); err != nil {
+		log.Println("error waiting for ffplay", err)
+	}
 }
