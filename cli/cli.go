@@ -2,8 +2,11 @@ package cli
 
 import (
 	"blink-liveview-websocket/common"
+	"context"
 	"fmt"
+	"log"
 	"os"
+	"os/signal"
 )
 
 func Run(region *string, token *string, deviceType *string, accountId *int, networkId *int, cameraId *int) {
@@ -37,5 +40,21 @@ func Run(region *string, token *string, deviceType *string, accountId *int, netw
 		os.Exit(1)
 	}
 
-	common.Livestream(*region, *token, *deviceType, *accountId, *networkId, *cameraId)
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		log.Println("Received SIGINT")
+		cancelCtx()
+	}()
+
+	common.Livestream(ctx, common.AccountDetails{
+		Region:     *region,
+		Token:      *token,
+		DeviceType: *deviceType,
+		AccountId:  *accountId,
+		NetworkId:  *networkId,
+		CameraId:   *cameraId,
+	})
 }

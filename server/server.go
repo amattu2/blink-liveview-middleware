@@ -24,30 +24,42 @@ var VALID_COMMANDS = []string{
 }
 
 func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]interface{}) {
-	select {
-	case <-ctx.Done():
-		log.Println("Context cancelled")
-		return
-	default:
-		region := data["account_region"].(string)
-		token := data["api_token"].(string)
-		account_id, _ := strconv.Atoi(data["account_id"].(string))
-		network_id, _ := strconv.Atoi(data["network_id"].(string))
-		camera_id, _ := strconv.Atoi(data["camera_id"].(string))
-		device_type := data["camera_type"].(string)
+	region := data["account_region"].(string)
+	token := data["api_token"].(string)
+	account_id, _ := strconv.Atoi(data["account_id"].(string))
+	network_id, _ := strconv.Atoi(data["network_id"].(string))
+	camera_id, _ := strconv.Atoi(data["camera_id"].(string))
+	device_type := data["camera_type"].(string)
 
-		// TODO: Pipe the output back to the client as binary data
-		// TODO: Kill the process when the client sends a stop command
-		common.Livestream(region, token, device_type, account_id, network_id, camera_id)
+	// TODO: Pipe the output back to the client as binary data
+	// TODO: Kill the process when the client sends a stop command
+	go common.Livestream(ctx, common.AccountDetails{
+		Region:     region,
+		Token:      token,
+		DeviceType: device_type,
+		AccountId:  account_id,
+		NetworkId:  network_id,
+		CameraId:   camera_id,
+	})
 
-		// Tell the client that the liveview has started
-		c.WriteJSON(MessageData{
-			Command: "liveview:start",
-			Data: map[string]interface{}{
-				"message": "Liveview started",
-			},
-		})
-	}
+	// Tell the client that the liveview has started
+	c.WriteJSON(MessageData{
+		Command: "liveview:start",
+		Data: map[string]interface{}{
+			"message": "Liveview started",
+		},
+	})
+
+	// Wait for the context to be cancelled
+	<-ctx.Done()
+
+	// Tell the client that the liveview has stopped
+	c.WriteJSON(MessageData{
+		Command: "liveview:stop",
+		Data: map[string]interface{}{
+			"message": "Liveview stopped. Context cancelled",
+		},
+	})
 }
 
 func websocketHandler(w http.ResponseWriter, r *http.Request) {

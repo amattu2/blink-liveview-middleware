@@ -4,68 +4,69 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 )
+
+type AccountDetails struct {
+	// Region to use for the API URL (e.g. "u011")
+	Region string
+	// API auth token to use for the API requests
+	Token string
+	// Type of device to use for the liveview path
+	DeviceType string
+	// Account ID that the camera belongs to
+	AccountId int
+	// Network ID that the camera is on
+	NetworkId int
+	// ID of the camera to start the liveview session for
+	CameraId int
+}
 
 // Livestream coordinates the liveview process for a Blink (Immedia Semiconductor) camera.
 // It starts a liveview session, polls the liveview command to keep the connection alive, and connects to the liveview server.
+// Returns an error if any of the steps fail.
 //
 // Refer to TCPStream for the connection process details and output methods.
 //
-// region: the region to use for the API URL (e.g. "u011")
+// ctx: the context to use for the liveview session, including cancellation
 //
-// token: the API auth token to use for the API requests
+// account: AccountDetails struct containing the necessary information to start a liveview session
 //
-// deviceType: the type of device to use for the liveview path
-//
-// accountId: the account ID that the camera belongs to
-//
-// networkId: the network ID that the camera is on
-//
-// cameraId: the ID of the camera to start the liveview session for
-//
-// Example: Livestream("u011", "example_token", "camera", 1234, 5678, 9012)
-func Livestream(region string, token string, deviceType string, accountId int, networkId int, cameraId int) {
-	baseUrl := GetApiUrl(region)
-	liveViewPath, err := GetLiveviewPath(deviceType)
+// Example: Livestream("u011", "example_token", "camera", 1234, 5678, 9012) -> nil
+func Livestream(ctx context.Context, account AccountDetails) error {
+	baseUrl := GetApiUrl(account.Region)
+	liveViewPath, err := GetLiveviewPath(account.DeviceType)
 	if err != nil {
 		log.Println("Error getting liveview path", err)
-		return
+		return err
 	}
 
 	// Tell Blink we want to start a liveview session
-	resp, err := BeginLiveview(fmt.Sprintf(liveViewPath, baseUrl, accountId, networkId, cameraId), token)
+	resp, err := BeginLiveview(fmt.Sprintf(liveViewPath, baseUrl, account.AccountId, account.NetworkId, account.CameraId), account.Token)
 	if err != nil {
 		log.Println("Error starting liveview session", err)
-		return
+		return err
 	} else if resp == nil || resp.CommandId == 0 {
 		log.Println("Error sending liveview command", resp)
-		return
+		return fmt.Errorf("error sending liveview command")
 	}
 
 	// Poll the liveview command to keep the connection alive
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	go PollCommand(ctx, fmt.Sprintf("%s/network/%d/command/%d", baseUrl, networkId, resp.CommandId), token, resp.PollingInterval)
-	defer StopCommand(fmt.Sprintf("%s/network/%d/command/%d/done", baseUrl, networkId, resp.CommandId), token)
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		log.Println("Received SIGINT. Stopping liveview session.")
-		cancelCtx()
-	}()
+	go PollCommand(ctx, fmt.Sprintf("%s/network/%d/command/%d", baseUrl, account.NetworkId, resp.CommandId), account.Token, resp.PollingInterval)
+	defer StopCommand(fmt.Sprintf("%s/network/%d/command/%d/done", baseUrl, account.NetworkId, resp.CommandId), account.Token)
 
 	// Get the connection details
 	connectionDetails, err := ParseConnectionString(resp.Server)
 	if err != nil {
 		log.Println("Error parsing connection string", err)
-		return
+		return err
 	}
 
 	// Connect to the liveview server
 	if err := TCPStream(ctx, *connectionDetails); err != nil {
 		log.Println("TCPStream error", err)
+		return err
 	}
+
+	<-ctx.Done()
+	return nil
 }
