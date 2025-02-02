@@ -1,81 +1,171 @@
 <!DOCTYPE html>
 <html>
 
-<head></head>
-<meta charset="utf-8">
-<title>Blink Liveview Stream</title>
+<head>
+  <meta charset="utf-8">
+  <title>Blink Liveview Middleware - Demo</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+  </style>
 </head>
 
 <body>
-  <table>
-    <tr>
-      <td valign="top" width="50%">
-        <form>
-          <button id="open">Open</button>
-          <button id="close">Close</button>
-          <p>
-            <input id="input" type="text" value="Hello world!">
-            <button id="send">Send</button>
-          </p>
-        </form>
-      </td>
-      <td valign="top" width="50%">
-        <div id="output" style="max-height: 70vh;overflow-y: scroll;"></div>
-      </td>
-    </tr>
-  </table>
+  <h1>Blink Liveview Middleware - Demo</h1>
+  <div>
+    <div>
+      <p>Controls</p>
+      <button id="open">Open</button>
+      <button id="close" disabled>Close</button>
+      <button id="toggle-liveview" disabled>Start Liveview</button>
+    </div>
+    <div>
+      <p>Livestream Details</p>
+      <form>
+        <div>
+          <label for="account-region">Account Region</label>
+          <input type="text" id="account-region" placeholder="u011" />
+        </div>
+        <div>
+          <label for="api-token">API Token</label>
+          <input type="text" id="api-token" placeholder="" />
+        </div>
+        <div>
+          <label for="account-id">Account ID</label>
+          <input type="number" id="account-id" placeholder="57381" />
+        </div>
+        <div>
+          <label for="network-id">Network ID</label>
+          <input type="number" id="network-id" placeholder="128991" />
+        </div>
+        <div>
+          <label for="camera-id">Camera ID</label>
+          <input type="number" id="camera-id" placeholder="122" />
+        </div>
+        <div>
+          <label for="camera-type">Camera Type</label>
+          <input type="text" id="camera-type" placeholder="owl" />
+        </div>
+      </form>
+    </div>
+    <hr />
+    <div>
+      <p>Video stream</p>
+      <video src="/" alt="Video stream" />
+    </div>
+    <div>
+      <p>Websocket Output</p>
+      <div id="output"></div>
+    </div>
+  </div>
   <script>
-    window.addEventListener("load", function (evt) {
+    var ws;
+    var liveviewActive = false;
 
-      var output = document.getElementById("output");
-      var input = document.getElementById("input");
-      var ws;
+    const output = document.getElementById("output");
+    const print = (data) => {
+      var d = document.createElement("div");
+      d.textContent = data;
+      output.appendChild(d);
+      output.scroll(0, output.scrollHeight);
+    };
 
-      var print = function (message) {
-        var d = document.createElement("div");
-        d.textContent = message;
-        output.appendChild(d);
-        output.scroll(0, output.scrollHeight);
-      };
+    const toggleButtons = (state) => {
+      document.getElementById("open").disabled = !state;
+      document.getElementById("toggle-liveview").disabled = state;
+      document.getElementById("close").disabled = state;
+      toggleLiveview(false);
+    };
 
-      document.getElementById("open").onclick = function (evt) {
-        if (ws) {
-          return false;
-        }
-        ws = new WebSocket("ws://localhost:8080/liveview");
-        ws.onopen = function (evt) {
-          print("OPEN");
-        }
-        ws.onclose = function (evt) {
-          print("CLOSE");
-          ws = null;
-        }
-        ws.onmessage = function (evt) {
-          print("RESPONSE: " + evt.data);
-        }
-        ws.onerror = function (evt) {
-          print("ERROR: " + evt.data);
-        }
+    const toggleLiveview = (state) => {
+      liveviewActive = state;
+      document.getElementById("toggle-liveview").textContent = !state ? "Start Liveview" : "Stop Liveview";
+    };
+
+    document.getElementById("open").onclick = function (evt) {
+      if (ws) {
         return false;
-      };
-
-      document.getElementById("send").onclick = function (evt) {
-        if (!ws) {
-          return false;
+      }
+      ws = new WebSocket("ws://localhost:8080/liveview");
+      ws.onopen = function (evt) {
+        print("OPEN");
+        toggleButtons(false);
+      }
+      ws.onclose = function (evt) {
+        print("CLOSE");
+        toggleButtons(true);
+        ws = null;
+      }
+      ws.onmessage = function (evt) {
+        if (evt.data instanceof Blob) {
+          print("BLOB: " + evt.data.size + " bytes");
+          return;
         }
-        print("SEND: " + input.value);
-        ws.send(input.value);
-        return false;
-      };
 
-      document.getElementById("close").onclick = function (evt) {
-        if (!ws) {
-          return false;
-        }
-        ws.close();
+        print("RESPONSE: " + evt.data);
+      }
+      ws.onerror = function (evt) {
+        print("ERROR: " + evt.data);
+      }
+
+      return false;
+    };
+
+    document.getElementById("toggle-liveview").onclick = function (evt) {
+      if (!ws) {
         return false;
+      }
+
+      if (liveviewActive) {
+        const data = {
+          command: "liveview:stop",
+          data: {},
+        };
+        ws.send(JSON.stringify(data));
+        print("SENT: " + JSON.stringify(data));
+        toggleLiveview(false);
+        return false;
+      }
+
+      const form = document.querySelector("form");
+      const data = {
+        command: "liveview:start",
+        data: {
+          account_region: form.querySelector("#account-region").value,
+          api_token: form.querySelector("#api-token").value,
+          account_id: form.querySelector("#account-id").value,
+          network_id: form.querySelector("#network-id").value,
+          camera_id: form.querySelector("#camera-id").value,
+          camera_type: form.querySelector("#camera-type").value,
+        },
       };
-    });
+      localStorage.setItem("details", JSON.stringify(data));
+      ws.send(JSON.stringify(data));
+      toggleLiveview(true);
+      print("SENT: " + JSON.stringify(data));
+    };
+
+    document.getElementById("close").onclick = function (evt) {
+      if (!ws) {
+        return false;
+      }
+      ws.close();
+      return false;
+    };
+
+    window.onload = function (evt) {
+      const details = JSON.parse(localStorage.getItem("details"));
+      if (details) {
+        const form = document.querySelector("form");
+        form.querySelector("#account-region").value = details.data.account_region;
+        form.querySelector("#api-token").value = details.data.api_token;
+        form.querySelector("#account-id").value = details.data.account_id;
+        form.querySelector("#network-id").value = details.data.network_id;
+        form.querySelector("#camera-id").value = details.data.camera_id;
+        form.querySelector("#camera-type").value = details.data.camera_type;
+      }
+    };
   </script>
 </body>
 

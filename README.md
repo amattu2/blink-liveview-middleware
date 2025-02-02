@@ -47,7 +47,9 @@ your implementing application to provide the necessary information to the server
 Start the server with the following command:
 
 ```bash
-TODO
+go run cmd/server/main.go \
+  --address=:8080
+  --env=development
 ```
 
 Then open the example web application in your browser. Provide the necessary

@@ -8,6 +8,7 @@ import (
 
 var (
 	address = flag.String("address", ":8080", "HTTP server address")
+	env     = flag.String("env", "production", "Environment (development, production)")
 )
 
 func main() {
@@ -20,5 +21,5 @@ func main() {
 
 	flag.Parse()
 
-	server.Run(address)
+	server.Run(address, env)
 }
