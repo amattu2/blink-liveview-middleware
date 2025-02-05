@@ -7,6 +7,10 @@
   <style>
     body {
       font-family: sans-serif;
+      margin: 0;
+      padding: 8px;
+      background: #757575;
+      color: #000;
     }
   </style>
 </head>
@@ -52,16 +56,30 @@
     <hr />
     <div>
       <p>Video stream</p>
-      <video src="/" alt="Video stream" />
+      <video id="video" alt="Video stream" controls autoplay />
     </div>
     <div>
       <p>Websocket Output</p>
-      <div id="output"></div>
+      <div id="output" style="max-height: 400px; overflow-y: scroll"></div>
     </div>
   </div>
   <script>
     var ws;
     var liveviewActive = false;
+    let mediaSource = new MediaSource();
+    let queue = [];
+    let sourceBuffer;
+
+    document.getElementById("video").src = URL.createObjectURL(mediaSource);
+
+    mediaSource.addEventListener('sourceopen', () => {
+      sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+      sourceBuffer.addEventListener('updateend', () => {
+        if (queue.length > 0 && !sourceBuffer.updating) {
+          sourceBuffer.appendBuffer(queue.shift());
+        }
+      });
+    });
 
     const output = document.getElementById("output");
     const print = (data) => {
@@ -87,20 +105,33 @@
       if (ws) {
         return false;
       }
+
       ws = new WebSocket("ws://localhost:8080/liveview");
+      ws.binaryType = "arraybuffer";
+
       ws.onopen = function (evt) {
         print("OPEN");
         toggleButtons(false);
       }
+
       ws.onclose = function (evt) {
         print("CLOSE");
         toggleButtons(true);
         ws = null;
       }
+
       ws.onmessage = function (evt) {
-        if (evt.data instanceof Blob) {
-          print("BLOB: " + evt.data.size + " bytes");
+        if (evt.data instanceof ArrayBuffer) {
+          queue.push(new Uint8Array(evt.data));
+          if (sourceBuffer && !sourceBuffer.updating) {
+            sourceBuffer.appendBuffer(queue.shift());
+          }
+
           return;
+        }
+
+        if (JSON.parse(evt.data)?.command === "liveview:stop") {
+          toggleLiveview(false);
         }
 
         print("RESPONSE: " + evt.data);

@@ -105,7 +105,7 @@ sequenceDiagram
     B->>C: Command Response
 ```
 
-# Requirements & Dependencies
+# Dependencies
 
 - Go 1.23+
-- ffmpeg (for the CLI tool)
+- ffmpeg

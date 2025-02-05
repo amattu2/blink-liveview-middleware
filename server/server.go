@@ -12,17 +12,20 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{}
-
 type MessageData struct {
 	Command string                 `json:"command"`
 	Data    map[string]interface{} `json:"data"`
 }
 
+var upgrader = websocket.Upgrader{}
+
 var VALID_COMMANDS = []string{
 	"liveview:start",
 	"liveview:stop",
 }
+
+// The buffer size before dispatching the data to the WebSocket connection in bytes
+var BUFFER_SIZE = 8 * 1024
 
 func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]interface{}) {
 	region := data["account_region"].(string)
@@ -34,8 +37,7 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 
 	pipeReader, pipeWriter := io.Pipe()
 
-	// TODO: Pipe the output back to the client as binary data
-	// TODO: Kill the process when the client sends a stop command
+	// TODO: Handle Livestream errors and propagate them to the client
 	go common.Livestream(ctx, common.AccountDetails{
 		Region:     region,
 		Token:      token,
@@ -55,7 +57,10 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 
 	// Forward messages from the pipe to the WebSocket connection
 	go func() {
-		buf := make([]byte, 1024)
+		buf := make([]byte, BUFFER_SIZE)
+		tempBuf := make([]byte, 0, BUFFER_SIZE)
+
+		// Read from the pipe and write to the WebSocket connection
 		for {
 			n, err := pipeReader.Read(buf)
 			if err != nil {
@@ -64,9 +69,21 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 				}
 				break
 			}
-			if err := c.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
-				log.Printf("Error writing to WebSocket: %v", err)
-				break
+
+			tempBuf = append(tempBuf, buf[:n]...)
+			for len(tempBuf) >= BUFFER_SIZE {
+				if err := c.WriteMessage(websocket.BinaryMessage, tempBuf[:BUFFER_SIZE]); err != nil {
+					log.Printf("Error writing to WebSocket: %v", err)
+					break
+				}
+				tempBuf = tempBuf[BUFFER_SIZE:]
+			}
+		}
+
+		// Send any remaining data in tempBuf
+		if len(tempBuf) > 0 {
+			if err := c.WriteMessage(websocket.BinaryMessage, tempBuf); err != nil {
+				log.Printf("Error writing remaining data to WebSocket: %v", err)
 			}
 		}
 	}()
