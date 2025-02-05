@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os/exec"
 	"slices"
 	"strconv"
 
@@ -25,7 +26,7 @@ var VALID_COMMANDS = []string{
 }
 
 // The buffer size before dispatching the data to the WebSocket connection in bytes
-var BUFFER_SIZE = 8 * 1024
+var BUFFER_SIZE = 12 * 1024
 
 func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]interface{}) {
 	region := data["account_region"].(string)
@@ -35,7 +36,29 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	camera_id, _ := strconv.Atoi(data["camera_id"].(string))
 	device_type := data["camera_type"].(string)
 
-	pipeReader, pipeWriter := io.Pipe()
+	// TODO: Strip metadata from the stream before piping it to the client
+	ffmpegCmd := exec.Command("ffmpeg",
+		"-i", "pipe:0",
+		"-f", "mpegts",
+		"-err_detect", "ignore_err",
+		"pipe:1",
+	)
+	inputPipe, err := ffmpegCmd.StdinPipe()
+	if err != nil {
+		log.Println("error creating ffplay stdin pipe", err)
+	}
+	defer inputPipe.Close()
+
+	outputPipe, err := ffmpegCmd.StdoutPipe()
+	if err != nil {
+		log.Println("error creating ffplay stdout pipe", err)
+	}
+	defer outputPipe.Close()
+
+	if err := ffmpegCmd.Start(); err != nil {
+		log.Println("error starting ffplay", err)
+	}
+	defer ffmpegCmd.Process.Kill()
 
 	// TODO: Handle Livestream errors and propagate them to the client
 	go common.Livestream(ctx, common.AccountDetails{
@@ -45,7 +68,7 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 		AccountId:  account_id,
 		NetworkId:  network_id,
 		CameraId:   camera_id,
-	}, pipeWriter)
+	}, inputPipe)
 
 	// Tell the client that the liveview has started
 	c.WriteJSON(MessageData{
@@ -62,7 +85,7 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 
 		// Read from the pipe and write to the WebSocket connection
 		for {
-			n, err := pipeReader.Read(buf)
+			n, err := outputPipe.Read(buf)
 			if err != nil {
 				if err != io.EOF {
 					log.Printf("Error reading from pipe: %v", err)
@@ -91,9 +114,6 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	// Wait for the context to be cancelled
 	<-ctx.Done()
 
-	pipeReader.Close()
-	pipeWriter.Close()
-
 	// Tell the client that the liveview has stopped
 	c.WriteJSON(MessageData{
 		Command: "liveview:stop",
@@ -101,6 +121,10 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 			"message": "Liveview stopped. Context cancelled",
 		},
 	})
+
+	if err := ffmpegCmd.Wait(); err != nil {
+		log.Println("error waiting for ffplay", err)
+	}
 }
 
 func websocketHandler(w http.ResponseWriter, r *http.Request) {

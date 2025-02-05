@@ -108,4 +108,4 @@ sequenceDiagram
 # Dependencies
 
 - Go 1.23+
-- ffmpeg
+- ffmpeg / ffplay

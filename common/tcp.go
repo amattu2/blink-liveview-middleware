@@ -55,6 +55,7 @@ func TCPStream(ctx context.Context, connInfo ConnectionDetails, writer io.Writer
 		log.Println("Connected to", client.RemoteAddr())
 	}
 	defer client.Close()
+	defer log.Printf("Disconnected from %s:%s\n", connInfo.Host, connInfo.Port)
 
 	start := time.Now()
 	frames := GetTCPAuthFrames(connInfo.ConnectionId, connInfo.ClientId)
