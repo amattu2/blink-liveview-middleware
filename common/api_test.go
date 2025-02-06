@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,10 +29,14 @@ func TestSetRequestHeaders(t *testing.T) {
 }
 
 func TestPollCommandCancel(t *testing.T) {
-	called := false
+	var called bool
+	var mu sync.Mutex
+
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
+		mu.Lock()
 		called = true
+		mu.Unlock()
 	}))
 	defer mockServer.Close()
 
@@ -43,5 +48,7 @@ func TestPollCommandCancel(t *testing.T) {
 
 	mockCancel()
 
-	assert.Equal(t, called, true)
+	mu.Lock()
+	assert.Equal(t, true, called)
+	mu.Unlock()
 }
