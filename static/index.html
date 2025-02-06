@@ -12,6 +12,15 @@
       background: #757575;
       color: #000;
     }
+
+    h1 {
+      margin: 0
+    }
+
+    video {
+      width: 100%;
+      max-width: 640px;
+    }
   </style>
 </head>
 
@@ -19,13 +28,13 @@
   <h1>Blink Liveview Middleware - Demo</h1>
   <div>
     <div>
-      <p>Controls</p>
+      <h2>Controls</h2>
       <button id="open">Open</button>
       <button id="close" disabled>Close</button>
       <button id="toggle-liveview" disabled>Start Liveview</button>
     </div>
     <div>
-      <p>Livestream Details</p>
+      <h2>Connection Credentials</h2>
       <form>
         <div>
           <label for="account-region">Account Region</label>
@@ -55,25 +64,29 @@
     </div>
     <hr />
     <div>
-      <p>Video stream</p>
-      <video id="video" alt="Video stream" controls autoplay />
+      <h2>Video stream</h2>
+      <video id="video" alt="Video stream" controls />
     </div>
     <div>
-      <p>Raw WebSocket Output</p>
+      <h2>Raw WebSocket Output</h2>
       <div id="output" style="max-height: 400px; overflow-y: scroll"></div>
     </div>
   </div>
   <script>
     var ws;
     var liveviewActive = false;
-    let mediaSource = new MediaSource();
+    const mediaSource = new MediaSource();
     let queue = [];
-    let sourceBuffer;
+    let sourceBuffer = null;
 
     document.getElementById("video").src = URL.createObjectURL(mediaSource);
 
     mediaSource.addEventListener('sourceopen', () => {
-      sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+      if (!mediaSource.sourceBuffers.length) {
+        sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.640029,mp4a.40.2"');
+        sourceBuffer.mode = "segments";
+      }
+
       sourceBuffer.addEventListener('updateend', () => {
         if (queue.length > 0 && !sourceBuffer.updating) {
           sourceBuffer.appendBuffer(queue.shift());
@@ -132,6 +145,9 @@
 
         if (JSON.parse(evt.data)?.command === "liveview:stop") {
           toggleLiveview(false);
+          document.getElementById("video").pause();
+        } else if (JSON.parse(evt.data)?.command === "liveview:start") {
+          document.getElementById("video").play();
         }
 
         print("RESPONSE: " + evt.data);

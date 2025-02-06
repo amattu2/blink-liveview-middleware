@@ -18,7 +18,10 @@ type MessageData struct {
 	Data    map[string]interface{} `json:"data"`
 }
 
-var upgrader = websocket.Upgrader{}
+var upgrader = websocket.Upgrader{
+	// TODO: Check if this is useful
+	// EnableCompression: true,
+}
 
 var VALID_COMMANDS = []string{
 	"liveview:start",
@@ -26,7 +29,7 @@ var VALID_COMMANDS = []string{
 }
 
 // The buffer size before dispatching the data to the WebSocket connection in bytes
-var BUFFER_SIZE = 12 * 1024
+var BUFFER_SIZE = 4 * 1024
 
 func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]interface{}) {
 	region := data["account_region"].(string)
@@ -39,10 +42,16 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	// TODO: Strip metadata from the stream before piping it to the client
 	ffmpegCmd := exec.Command("ffmpeg",
 		"-i", "pipe:0",
-		"-f", "mpegts",
-		"-err_detect", "ignore_err",
-		"pipe:1",
+		"-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
+		// "-b:v", "1M",
+		"-c:a", "aac", "-b:a", "128k",
+		"-movflags", "frag_keyframe+empty_moov+default_base_moof",
+		"-min_frag_duration", "500000", // 500ms fragments
+		"-fflags", "nobuffer",
+		"-flush_packets", "1", // Ensure FFmpeg writes data immediately
+		"-f", "mp4", "pipe:1", // Output to stdout
 	)
+
 	inputPipe, err := ffmpegCmd.StdinPipe()
 	if err != nil {
 		log.Println("error creating ffplay stdin pipe", err)
@@ -114,6 +123,11 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	// Wait for the context to be cancelled
 	<-ctx.Done()
 
+	inputPipe.Close()
+	if err := ffmpegCmd.Wait(); err != nil {
+		log.Println("error waiting for ffplay", err)
+	}
+
 	// Tell the client that the liveview has stopped
 	c.WriteJSON(MessageData{
 		Command: "liveview:stop",
@@ -121,10 +135,6 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 			"message": "Liveview stopped. Context cancelled",
 		},
 	})
-
-	if err := ffmpegCmd.Wait(); err != nil {
-		log.Println("error waiting for ffplay", err)
-	}
 }
 
 func websocketHandler(w http.ResponseWriter, r *http.Request) {
