@@ -1,4 +1,4 @@
-package cli
+package liveview
 
 import (
 	"blink-liveview-websocket/common"

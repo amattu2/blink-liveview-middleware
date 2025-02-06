@@ -25,7 +25,7 @@ liveview stream from a Blink Smart Security Camera. It's primarily used for test
 but can be used as a standalone tool if desired.
 
 ```bash
-go run cmd/cli/main.go \
+go run cmd/liveview/main.go \
   --region=<region> \
   --token=<api token> \
   --device-type=<lotus|owl|doorbell|etc> \
@@ -64,7 +64,10 @@ When deploying the service to production, this page is disabled by default.
 ## Building From Source
 
 ```bash
-TODO
+# Server binary (Windows)
+go build -a -o bin/server.exe cmd/server/main.go
+# Liveview binary (Windows)
+go build -a -o bin/liveview.exe cmd/liveview/main.go
 ```
 
 # Liveview Process

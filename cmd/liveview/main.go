@@ -1,7 +1,7 @@
 package main
 
 import (
-	"blink-liveview-websocket/cli"
+	cli "blink-liveview-websocket/liveview"
 	"flag"
 	"fmt"
 )
