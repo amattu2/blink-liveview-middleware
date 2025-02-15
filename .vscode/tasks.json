@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Websocket Server (DEV)",
+      "type": "shell",
+      "command": "go run cmd/server/main.go --address=:8080 --env=development",
+      "problemMatcher": []
+    }
+  ]
+}

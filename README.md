@@ -34,7 +34,9 @@ go run cmd/liveview/main.go \
   --camera-id=<camera id>
 ```
 
-## Server Usage
+## WebSocket Middleware
+
+### Server Usage
 
 The WebSocket server is a middleware service that can be used to proxy
 liveview streams from a Blink Smart Security Camera to a web application. It
@@ -49,9 +51,7 @@ you can have multiple streams running at the same time without overlapping.
 Start the server with the following command:
 
 ```bash
-go run cmd/server/main.go \
-  --address=:8080
-  --env=<development|production>
+go run cmd/server/main.go --address=:8080 --env=<development|production>
 ```
 
 Then open the sample web application in your browser. Provide the necessary
@@ -60,6 +60,59 @@ authentication information on the demo UI and click the "Start Liveview" button:
 <http://localhost:8080/index.html>
 
 When deploying the service to production, this page is disabled by default.
+
+### Client Usage
+
+Each client that connects to the WebSocket server is independent of the others,
+which means that each client must forward the Blink authentication information
+to the server once connected.
+
+By default, the server will close the connection if the client does not start
+liveview or send some sort of command within `8 seconds` of connecting.
+
+The following is an example of how to connect to the WebSocket server using
+JavaScript:
+
+```javascript
+// Open a WebSocket connection to the server
+const ws = new WebSocket('ws://localhost:8080/liveview');
+ws.binaryType = "arraybuffer";
+
+// Send the authentication information to the server
+// NOTE: This does not have to be done immediately after opening the connection
+ws.onopen = () => {
+    const data = JSON.stringify({
+        command: "liveview:start",
+        data: {
+          account_region: "",
+          api_token: "",
+          account_id: "",
+          network_id: "",
+          camera_id: "",
+          camera_type: "",
+        },
+    });
+
+    ws.send(data);
+};
+
+// Handle incoming messages from the server
+ws.onmessage = (evt) => {
+    if (evt.data instanceof ArrayBuffer) {
+        // Handle incoming livestream packets
+        return;
+    }
+
+    const data = JSON.parse(evt.data);
+    if (data?.command === "liveview:stop") {
+        // Handle receipt of the stop command
+        // The server stopped the livestream
+    } else if (data?.command === "liveview:start") {
+        // The server opened the livestream
+        // binary data will begin shortly
+    }
+};
+```
 
 ## Building From Source
 
