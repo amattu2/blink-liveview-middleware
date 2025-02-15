@@ -41,7 +41,12 @@ func Run(region *string, token *string, deviceType *string, accountId *int, netw
 		os.Exit(1)
 	}
 
-	ffplayCmd := exec.Command("ffplay", "-f", "mpegts", "-err_detect", "ignore_err", "-")
+	ffplayCmd := exec.Command("ffplay",
+		"-f", "mpegts",
+		"-err_detect", "ignore_err",
+		"-window_title", "Blink Liveview Middleware",
+		"-",
+	)
 	inputPipe, err := ffplayCmd.StdinPipe()
 	if err != nil {
 		log.Println("error creating ffplay stdin pipe", err)

@@ -18,48 +18,81 @@ These sections provide instructions on usage without compiling the code yourself
 If you would like to compile the code yourself, see the
 Building From Source section below.
 
+> [!WARNING]
+> Prior to running any of the commands, ensure that you have ffmpeg installed
+> on your system, and configured in your PATH (if applicable).
+
 ## Liveview Command
 
-The liveview script is a simple tool that uses ffmpeg to watch the
+The liveview command is a simple tool that uses ffplay (ffmpeg) to watch the
 liveview stream from a Blink Smart Security Camera. It's primarily used for testing,
 but can be used as a standalone tool if desired.
+
+Upon running the command, you should see a new window open with the liveview stream.
+The stream will be gracefully closed by terminating the CLI process.
 
 ```bash
 go run cmd/liveview/main.go \
   --region=<region> \
   --token=<api token> \
-  --device-type=<lotus|owl|doorbell|etc> \
+  --device-type=<device type> \
   --account-id=<account id> \
   --network-id=<network id> \
   --camera-id=<camera id>
 ```
 
+An explanation of the command line flags is provided below:
+
+- `--region`: The region of the Blink account (e.g. `u014`, `u011`, etc.). This
+is returned via the Blink login flow
+- `--token`: The API token for the current session. This is also returned via
+the Blink login flow
+- `--device-type`: The type of (camera) device to connect to (e.g. `owl`, `doorbell`).
+- `--account-id`: The account ID of the Blink account
+- `--network-id`: The ID of the network that the camera is on
+- `--camera-id`: The ID of the camera to watch
+
 ## WebSocket Middleware
+
+This section is broken down into two parts: the server and the client. The server
+is a WebSocket service that acts as middleware between a web application and the
+Blink Smart Security Camera. The client section provides an example of how to
+interface with the WebSocket server using JavaScript.
+
+Out of the box, the server provides a demo UI that can be used to test the liveview
+stream via a web browser.
 
 ### Server Usage
 
-The WebSocket server is a middleware service that can be used to proxy
-liveview streams from a Blink Smart Security Camera to a web application. It
-is designed to be used in conjunction with a web application that can send
-commands to the server to start and stop the liveview stream.
+The server is a basic Go HTTP server that utilizes the Gorilla WebSocket library.
+It has no built-in authentication or knowledge of the Blink API (beyond liveview),
+so it is entirely up to your implementing application to provide the necessary
+information to the server.
 
-It has no built-in authentication or knowledge of the Blink API, so it is up to
-your implementing application to provide the necessary information to the server.
-Each client that connects to the WebSocket is independent of the others, so
-you can have multiple streams running at the same time without overlapping.
+Each client that connects to the WebSocket is independent
+of the others, so you can have multiple streams running at the same time
+without overlapping.
 
 Start the server with the following command:
 
 ```bash
-go run cmd/server/main.go --address=:8080 --env=<development|production>
+go run cmd/server/main.go [--address=<addr>] [--env=<env>]
 ```
+
+An explanation of the command line flags is provided below:
+
+- `--address`: The address to bind the server to (e.g. `:8080`)
+- `--env`: The environment to run the server in (`development`, `production`).
+If `production` is specified, the demo UI will be disabled.
 
 Then open the sample web application in your browser. Provide the necessary
 authentication information on the demo UI and click the "Start Liveview" button:
 
 <http://localhost:8080/index.html>
 
-When deploying the service to production, this page is disabled by default.
+> [!NOTE]
+> The server does not currently limit the maximum number of clients that can
+> connect OR liveview at the same time. This may cause performance issues.
 
 ### Client Usage
 
@@ -78,18 +111,20 @@ JavaScript:
 const ws = new WebSocket('ws://localhost:8080/liveview');
 ws.binaryType = "arraybuffer";
 
-// Send the authentication information to the server
-// NOTE: This does not have to be done immediately after opening the connection
 ws.onopen = () => {
+    // Send the authentication information to the server
+    // NOTE: This should be done within 8 seconds of connecting,
+    // or the server will close the connection
     const data = JSON.stringify({
         command: "liveview:start",
         data: {
-          account_region: "",
-          api_token: "",
-          account_id: "",
-          network_id: "",
-          camera_id: "",
-          camera_type: "",
+            // Refer to the liveview CLI arguments for details on these fields
+            account_region: "",
+            api_token: "",
+            account_id: "",
+            network_id: "",
+            camera_id: "",
+            camera_type: "",
         },
     });
 
@@ -99,20 +134,23 @@ ws.onopen = () => {
 // Handle incoming messages from the server
 ws.onmessage = (evt) => {
     if (evt.data instanceof ArrayBuffer) {
-        // Handle incoming livestream packets
+        // Handle incoming video packets
         return;
     }
 
     const data = JSON.parse(evt.data);
     if (data?.command === "liveview:stop") {
-        // Handle receipt of the stop command
-        // The server stopped the livestream
+        // The server stopped the liveview
+        // Handle receipt of the stop command (e.g. stop the video player)
     } else if (data?.command === "liveview:start") {
-        // The server opened the livestream
-        // binary data will begin shortly
+        // The server opened the liveview
+        // binary data will begin shortly (delay of about 5 seconds)
     }
 };
 ```
+
+Refer to the demo UI [source code](static/index.html) for a more detailed example
+of how to connect and integrate the liveview stream into your web application.
 
 ## Building From Source
 
@@ -123,7 +161,7 @@ go build -a -o bin/server.exe cmd/server/main.go
 go build -a -o bin/liveview.exe cmd/liveview/main.go
 ```
 
-# Liveview Process
+# Blink Liveview Process
 
 The general process behind obtaining a liveview stream from a Blink camera is
 outlined below, ignoring the specifics of the Blink API and any potential error states.
@@ -164,4 +202,5 @@ sequenceDiagram
 # Dependencies
 
 - Go 1.23+
+- Gorilla WebSocket
 - ffmpeg / ffplay
