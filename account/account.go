@@ -10,18 +10,18 @@ import (
 	"golang.org/x/term"
 )
 
-func Run(email *string, password *string) {
-	if *email == "" {
+func Run(email string, password string) {
+	if email == "" {
 		fmt.Fprintf(os.Stderr, "No email parameter provided. Please specify via --email=<email address>\n")
 		os.Exit(1)
 	}
 
-	if *password == "" {
+	if password == "" {
 		fmt.Fprintf(os.Stderr, "No password provided.\n")
 		os.Exit(1)
 	}
 
-	resp, err := common.Login(*email, *password)
+	resp, err := common.Login(email, password)
 	if err != nil {
 		log.Println("error logging in", err)
 		os.Exit(1)
