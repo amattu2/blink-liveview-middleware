@@ -22,14 +22,39 @@ Building From Source section below.
 > Prior to running any of the commands, ensure that you have ffmpeg installed
 > on your system, and configured in your PATH (if applicable).
 
+## Account Command
+
+The account command is a simple interface for interacting with the Blink Liveview
+APIs. Simply provide the email address and password for the Blink account you wish
+to use, and the command will perform the necessary steps to obtain the API token
+and account information.
+
+Once retrieved, it will prompt you to select a camera to watch the liveview stream
+from, and then open the liveview stream in a new window using ffplay.
+
+```bash
+go run cmd/account/main.go --email=<email>
+```
+
+An explanation of the command line flags is provided below:
+
+- `--email`: The email address of the Blink account to use
+
+> [!NOTE]
+> The password is not provided as a command line flag for security reasons.
+> You will be prompted to enter the password after running the command.
+
 ## Liveview Command
 
-The liveview command is a simple tool that uses ffplay (ffmpeg) to watch the
-liveview stream from a Blink Smart Security Camera. It's primarily used for testing,
-but can be used as a standalone tool if desired.
+The liveview command is a direct way to watch the liveview stream from a Blink
+Smart Security Camera. It can be used in place of the above "account command"
+if you already have the necessary information to connect to the Blink API.
 
-Upon running the command, you should see a new window open with the liveview stream.
-The stream will be gracefully closed by terminating the CLI process.
+This is made available primarily used for testing, but can be used as
+a standalone tool if desired.
+
+Upon running the command, you should see a new ffplay window open with the
+liveview stream. The stream will be gracefully closed by terminating the CLI process.
 
 ```bash
 go run cmd/liveview/main.go \

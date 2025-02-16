@@ -174,3 +174,78 @@ func StopCommand(url string, token string) error {
 
 	return nil
 }
+
+type LoginBody struct {
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	UniqueId   string `json:"unique_id"`
+	ClientType string `json:"client_type"`
+	DeviceId   string `json:"device_identifier"`
+	OsVersion  string `json:"os_version"`
+	ClientName string `json:"client_name"`
+	Reauth     bool   `json:"reauth"`
+}
+
+type LoginResponse struct {
+	Account struct {
+		AccountId                  int    `json:"account_id"`
+		Tier                       string `json:"tier"`
+		ClientVerificationRequired bool   `json:"client_verification_required"`
+	} `json:"account"`
+	Auth struct {
+		Token string `json:"token"`
+	} `json:"auth"`
+}
+
+// Login logs in to the Blink API using the provided credentials
+//
+// email: the email address to use for login
+//
+// password: the password to use for login
+//
+// Example: Login("x", "y")
+func Login(email string, password string) (*LoginResponse, error) {
+	generated, unique_id, err := GetFingerprint("fingerprint.txt") // TODO: Only store after successful login
+	if err != nil {
+		return nil, err
+	}
+
+	jsonBody, _ := json.Marshal(&LoginBody{
+		Email:      email,
+		Password:   password,
+		UniqueId:   unique_id,
+		ClientType: "android",
+		DeviceId:   "Google Pixel 7 Pro, BlinkLiveviewMiddleware",
+		OsVersion:  "14.0",
+		ClientName: "blink-liveview-middleware",
+		Reauth:     !generated,
+	})
+
+	url := GetApiUrl("") + "/api/v5/account/login"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("content-type", "application/json; charset=UTF-8")
+
+	client := &http.Client{Timeout: time.Second * 10}
+	resp, err := client.Do(req)
+	if resp.StatusCode != http.StatusOK || err != nil {
+		return nil, fmt.Errorf("HTTP Status Code %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result LoginResponse
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

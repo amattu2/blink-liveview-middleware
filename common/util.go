@@ -2,10 +2,14 @@ package common
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // GetApiUrl builds the Blink API URL based on the region if provided
@@ -135,4 +139,41 @@ func GetTCPAuthFrames(connectionId string, clientId int) [][]byte {
 		frame4,
 		frame5,
 	}
+}
+
+// GetFingerprint returns the fingerprint from the fingerprint file.
+// If the file does not exist, it will be created and a new fingerprint will be generated.
+// The boolean return value indicates if the fingerprint was generated
+//
+// Example: GetFingerprint("file-xyz.txt") = true, "fingerprint", nil
+func GetFingerprint(filename string) (bool, string, error) {
+	file, err := os.ReadFile(filename)
+	if errors.Is(err, os.ErrNotExist) {
+		fingerprint, err := GenerateFingerprint(filename)
+		return true, fingerprint, err
+	} else if err != nil {
+		return false, "", fmt.Errorf("error reading fingerprint file: %w", err)
+	}
+
+	fingerprint := string(file)
+	if fingerprint == "" {
+		fingerprint, err := GenerateFingerprint(filename)
+		return true, fingerprint, err
+	}
+
+	return false, fingerprint, nil
+}
+
+// GenerateFingerprint generates a new fingerprint and writes it to the fingerprint file
+//
+// filename: the name of the file to write the fingerprint to
+//
+// Example: GenerateFingerprint("fingerprint.txt") = "uuid-123-xxx", nil
+func GenerateFingerprint(filename string) (string, error) {
+	fingerprint := uuid.New().String()
+	if err := os.WriteFile(filename, []byte(fingerprint), 0644); err != nil {
+		return "", fmt.Errorf("error writing fingerprint file: %w", err)
+	}
+
+	return fingerprint, nil
 }
