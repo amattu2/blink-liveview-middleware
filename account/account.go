@@ -110,7 +110,8 @@ func RunWithCredentials(email string, password string) {
 		os.Exit(1)
 	}
 
-	resp, err := common.Login(email, password, fingerprint)
+	loginUrl := common.GetApiUrl("") + "/api/v5/account/login"
+	resp, err := common.Login(loginUrl, email, password, fingerprint)
 	if err != nil {
 		log.Println("error logging in", err)
 		os.Exit(1)

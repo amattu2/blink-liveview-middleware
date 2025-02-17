@@ -206,12 +206,12 @@ type LoginResponse struct {
 //
 // fp: the fingerprint to use for login
 //
-// Example: Login("x", "y", &Fingerprint{New: true})
-func Login(email string, password string, fp *Fingerprint) (*LoginResponse, error) {
+// Example: Login("https://example.com/", "x", "y", &Fingerprint{New: true})
+func Login(url string, email string, password string, fp *Fingerprint) (*LoginResponse, error) {
 	jsonBody, _ := json.Marshal(&LoginBody{
 		Email:      email,
 		Password:   password,
-		UniqueId:   fp.String(),
+		UniqueId:   fp.Value,
 		ClientType: "android",
 		DeviceId:   "Google Pixel 7 Pro, BlinkLiveviewMiddleware",
 		OsVersion:  "14.0",
@@ -219,7 +219,6 @@ func Login(email string, password string, fp *Fingerprint) (*LoginResponse, erro
 		Reauth:     !fp.New,
 	})
 
-	url := GetApiUrl("") + "/api/v5/account/login"
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
@@ -291,9 +290,6 @@ type BaseCameraDevice struct {
 	Name      string `json:"name"`
 	Type      string `json:"type"`
 	NetworkId int    `json:"network_id"`
-	UpdatedAt string `json:"updated_at"`
-	CreatedAt string `json:"created_at"`
-	Status    string `json:"status"`
 }
 
 type BaseNetwork struct {

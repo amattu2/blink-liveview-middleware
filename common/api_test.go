@@ -3,6 +3,7 @@ package common_test
 import (
 	"blink-liveview-websocket/common"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -167,4 +168,102 @@ func TestStopCommandHttpError(t *testing.T) {
 	err := common.StopCommand(mockServer.URL, "xyz-auth-token")
 
 	assert.Equal(t, "cannot stop command. HTTP Status Code 500", err.Error())
+}
+
+func TestLoginNominal(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		mockResponse := `{"account": {"account_id": 99, "client_id": 123, "tier": "u011", "client_verification_required": false}, "auth": {"token": "xyz-auth-token"}}`
+		w.Write([]byte(mockResponse))
+	}))
+	defer mockServer.Close()
+
+	fp := common.Fingerprint{
+		Value: "mock-fingerprint",
+		New:   false,
+	}
+	resp, err := common.Login(mockServer.URL, "mock-email", "mock-password", &fp)
+
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 99, resp.Account.AccountId)
+	assert.Equal(t, 123, resp.Account.ClientId)
+	assert.Equal(t, "u011", resp.Account.Tier)
+	assert.Equal(t, false, resp.Account.ClientVerificationRequired)
+	assert.Equal(t, "xyz-auth-token", resp.Auth.Token)
+}
+
+func TestLoginHttpError(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mockServer.Close()
+
+	fp := common.Fingerprint{
+		Value: "mock-fingerprint",
+		New:   false,
+	}
+	resp, err := common.Login(mockServer.URL, "mock-email", "mock-password", &fp)
+
+	assert.Equal(t, nil, resp)
+	assert.Equal(t, "HTTP Status Code 500", err.Error())
+}
+
+func TestVerifyPinNominal(t *testing.T) {
+	var mu sync.Mutex
+	var bodyPin string
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		w.WriteHeader(http.StatusOK)
+		var body []byte
+		body, _ = io.ReadAll(r.Body)
+		bodyPin = string(body)
+		mu.Unlock()
+	}))
+	defer mockServer.Close()
+
+	err := common.VerifyPin(mockServer.URL, "xyz-auth-token", "193481")
+
+	mu.Lock()
+	assert.Equal(t, `{"pin":"193481"}`, bodyPin)
+	mu.Unlock()
+	assert.Equal(t, nil, err)
+}
+
+func TestVerifyPinHttpError(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mockServer.Close()
+
+	err := common.VerifyPin(mockServer.URL, "xyz-auth-token", "193481")
+
+	assert.Equal(t, "HTTP Status Code 500", err.Error())
+}
+
+func TestHomescreenNominal(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"networks": [], "owls": [], "doorbells": []}`))
+	}))
+	defer mockServer.Close()
+
+	resp, err := common.Homescreen(mockServer.URL, "xyz-auth-token")
+
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 0, len(resp.Networks))
+	assert.Equal(t, 0, len(resp.Owls))
+	assert.Equal(t, 0, len(resp.Doorbells))
+}
+
+func TestHomescreenHttpError(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mockServer.Close()
+
+	resp, err := common.Homescreen(mockServer.URL, "xyz-auth-token")
+
+	assert.Equal(t, nil, resp)
+	assert.Equal(t, "HTTP Status Code 500", err.Error())
 }
