@@ -189,6 +189,7 @@ type LoginBody struct {
 type LoginResponse struct {
 	Account struct {
 		AccountId                  int    `json:"account_id"`
+		ClientId                   int    `json:"client_id"`
 		Tier                       string `json:"tier"`
 		ClientVerificationRequired bool   `json:"client_verification_required"`
 	} `json:"account"`
@@ -203,22 +204,19 @@ type LoginResponse struct {
 //
 // password: the password to use for login
 //
-// Example: Login("x", "y")
-func Login(email string, password string) (*LoginResponse, error) {
-	generated, unique_id, err := GetFingerprint("fingerprint.txt") // TODO: Only store after successful login
-	if err != nil {
-		return nil, err
-	}
-
+// fp: the fingerprint to use for login
+//
+// Example: Login("x", "y", &Fingerprint{New: true})
+func Login(email string, password string, fp *Fingerprint) (*LoginResponse, error) {
 	jsonBody, _ := json.Marshal(&LoginBody{
 		Email:      email,
 		Password:   password,
-		UniqueId:   unique_id,
+		UniqueId:   fp.String(),
 		ClientType: "android",
 		DeviceId:   "Google Pixel 7 Pro, BlinkLiveviewMiddleware",
 		OsVersion:  "14.0",
 		ClientName: "blink-liveview-middleware",
-		Reauth:     !generated,
+		Reauth:     !fp.New,
 	})
 
 	url := GetApiUrl("") + "/api/v5/account/login"
@@ -248,4 +246,42 @@ func Login(email string, password string) (*LoginResponse, error) {
 	}
 
 	return &result, nil
+}
+
+type VerifyPinBody struct {
+	Pin string `json:"pin"`
+}
+
+type VerifyPinResponse struct {
+}
+
+// VerifyPin will post the provided pin to the verification URL
+//
+// url: the URL to send the verification request to
+//
+// token: the API token to use for the request
+//
+// pin: the pin to verify
+//
+// Example: VerifyPin("https://example.com", "api-token-here", "123456") // returns nil
+func VerifyPin(url string, token string, pin string) error {
+	jsonBody, _ := json.Marshal(&VerifyPinBody{
+		Pin: pin,
+	})
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return err
+	}
+
+	SetRequestHeaders(req, token)
+
+	client := &http.Client{Timeout: time.Second * 10}
+	resp, err := client.Do(req)
+	if resp.StatusCode != http.StatusOK || err != nil {
+		return fmt.Errorf("HTTP Status Code %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	return nil
 }

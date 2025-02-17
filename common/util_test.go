@@ -3,7 +3,6 @@ package common_test
 import (
 	"blink-liveview-websocket/common"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/go-playground/assert/v2"
@@ -210,50 +209,4 @@ func TestGetTCPAuthFrame5(t *testing.T) {
 		0x00, 0x00, 0x00, 0x01, 0x0a, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00,
 	})
-}
-
-func TestGetFingerprintNominal(t *testing.T) {
-	mockdir := t.TempDir()
-	mockFile := mockdir + "/fingerprint.txt"
-	os.WriteFile(mockFile, []byte("this-is-a-fake-uuid"), 0644)
-
-	generated, fingerprint, err := common.GetFingerprint(mockFile)
-
-	assert.Equal(t, generated, false)
-	assert.Equal(t, fingerprint, "this-is-a-fake-uuid")
-	assert.Equal(t, err, nil)
-}
-
-func TestGetFingerprintFileDoesNotExist(t *testing.T) {
-	mockdir := t.TempDir()
-	mockFile := mockdir + "/fingerprint.txt"
-	generated, fingerprint, err := common.GetFingerprint(mockFile)
-
-	assert.Equal(t, generated, true)
-	assert.NotEqual(t, fingerprint, "") // should be a UUID
-	assert.Equal(t, err, nil)
-}
-
-func TestGetFingerprintEmptyFile(t *testing.T) {
-	mockdir := t.TempDir()
-	mockFile := mockdir + "/fingerprint.txt"
-	os.WriteFile(mockFile, []byte(""), 0644)
-
-	generated, fingerprint, err := common.GetFingerprint(mockFile)
-
-	assert.Equal(t, generated, true)
-	assert.NotEqual(t, fingerprint, "") // should be a UUID
-	assert.Equal(t, err, nil)
-}
-
-func TestGenerateFingerprintNominal(t *testing.T) {
-	mockdir := t.TempDir()
-	mockFile := mockdir + "/fingerprint-normal.txt"
-	fingerprint, err := common.GenerateFingerprint(mockFile)
-
-	file, _ := os.ReadFile(mockFile)
-
-	assert.NotEqual(t, fingerprint, "")
-	assert.Equal(t, fingerprint, string(file)) // Ensure the file contains the fingerprint returned
-	assert.Equal(t, err, nil)
 }
