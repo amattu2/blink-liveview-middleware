@@ -155,12 +155,12 @@ type DeviceOption struct {
 // resp: the HomescreenResponse containing the device information
 //
 // Example: PrintDeviceOptions(&HomescreenResponse{Networks: []Network{...}, Owls: []Owl{...}, Doorbells: []Doorbell{...}})
-func PrintDeviceOptions(resp *HomescreenResponse) []DeviceOption {
+func PrintDeviceOptions(resp *HomescreenResponse) (string, []DeviceOption) {
 	if len(resp.Networks) == 0 {
-		return nil
+		return "", nil
 	}
 	if len(resp.Owls) == 0 && len(resp.Doorbells) == 0 {
-		return nil
+		return "", nil
 	}
 
 	var networkGroups []NetworkGroup
@@ -183,13 +183,14 @@ func PrintDeviceOptions(resp *HomescreenResponse) []DeviceOption {
 		})
 	}
 
+	var sb strings.Builder
 	var options []DeviceOption
 	var idx int = 1
 	for _, group := range networkGroups {
-		fmt.Println(group.Name)
+		sb.WriteString(fmt.Sprintf("Network: %s\n", group.Name))
 		for _, device := range group.Devices {
 			formattedName := fmt.Sprintf("%s (%s)", device.Name, device.Type)
-			fmt.Printf("  [%02d] %s\n", idx, formattedName)
+			sb.WriteString(fmt.Sprintf("  [%02d] %s\n", idx, formattedName))
 			options = append(options, DeviceOption{
 				Option:        idx,
 				FormattedName: formattedName,
@@ -201,5 +202,5 @@ func PrintDeviceOptions(resp *HomescreenResponse) []DeviceOption {
 		}
 	}
 
-	return options
+	return sb.String(), options
 }

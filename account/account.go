@@ -31,10 +31,12 @@ func Run(token string, accountId int, region string) {
 	}
 
 	fmt.Println("Select a device to start a liveview stream:")
-	options := common.PrintDeviceOptions(devices)
+	output, options := common.PrintDeviceOptions(devices)
 	if len(options) == 0 {
 		log.Println("no devices found")
 		os.Exit(1)
+	} else {
+		fmt.Println(output)
 	}
 
 getDevice:
@@ -136,7 +138,7 @@ func RunWithCredentials(email string, password string) {
 		log.Println("error saving the fingerprint. Next login will require a new SMS code.", err)
 	}
 
-	log.Printf("Logged in successfully. Token: %s, AccountID: %d, Region: %s\n", resp.Auth.Token, resp.Account.AccountId, resp.Account.Tier)
+	log.Printf("Logged in successfully. Token: %s, AccountId: %d, Region: %s\n", resp.Auth.Token, resp.Account.AccountId, resp.Account.Tier)
 
 	Run(resp.Auth.Token, resp.Account.AccountId, resp.Account.Tier)
 }
