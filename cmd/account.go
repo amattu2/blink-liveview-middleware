@@ -16,7 +16,7 @@ var accountCmd = &cobra.Command{
 	Long: `This command will authenticate with your Blink account, fetch a list of available cameras,
 and start a liveview stream from the selected camera.
 
-Additionally, you can provide a token and region to bypass the login process.
+Additionally, you can provide an API token, account ID, and region to bypass the login process.
 
 Use this command if you want to start a liveview stream, but do not have the
 full connection credentials already.`,

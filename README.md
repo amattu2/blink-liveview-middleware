@@ -30,39 +30,44 @@ go run main.go <command> [flags]
 ## Account Command
 
 The account command is a simple interface for interacting with the Blink Liveview
-APIs. Simply provide the email address and password for the Blink account you wish
-to use, and the command will perform the necessary steps to obtain the API token
-and account information.
+APIs without retrieving technical connection details on your own. Provide the email
+address and password for the Blink account you wish to use, and the command will
+perform the necessary steps to obtain the API token and account information.
 
 Once retrieved, it will prompt you to select a camera to watch the liveview stream
 from, and then open the liveview stream in a new window using ffplay.
 
+Additionally, the command will output the API Token, Account ID, and Region, which
+can be used to shortcut the process in the future.
+
 ```bash
-go run main.go account [--email=<email>] [--token=<api token> --region=<region>]
+go run main.go account \
+    [--email=<email>] \
+    [--token=<api token> --account-id=<account id> --region=<region>]
 ```
 
 An explanation of the command line flags is provided below:
 
-(Option 1)
+Option 1: Email & Password
 
 - `-e`, `--email`: The email address of the Blink account to use
 
-(Option 2)
+> [!NOTE]
+> The password is not provided as a command line flag for security reasons.
+> You will be prompted to enter the password after running the command.
+
+Option 2: API Token, Account ID, & Region
 
 - `-t`, `--token`: The API token for the current session. This is returned via
 the Blink login flow
 - `-a`, `--account-id`: The account ID of the Blink account
 - `-r`, `--region`: The region of the Blink account (e.g. `u014`, `u011`, etc.)
 
-> [!NOTE]
-> The password is not provided as a command line flag for security reasons.
-> You will be prompted to enter the password after running the command.
-
 ## Liveview Command
 
 The liveview command is a direct way to watch the liveview stream from a Blink
 Smart Security Camera. It can be used in place of the above "account command"
-if you already have the necessary information to connect to the Blink API.
+if you already have all of the necessary information to connect to the Blink API.
 
 This is made available primarily used for testing, but can be used as
 a standalone tool if desired.
