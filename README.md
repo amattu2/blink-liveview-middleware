@@ -38,12 +38,21 @@ Once retrieved, it will prompt you to select a camera to watch the liveview stre
 from, and then open the liveview stream in a new window using ffplay.
 
 ```bash
-go run main.go account --email=<email>
+go run main.go account [--email=<email>] [--token=<api token> --region=<region>]
 ```
 
 An explanation of the command line flags is provided below:
 
+(Option 1)
+
 - `-e`, `--email`: The email address of the Blink account to use
+
+(Option 2)
+
+- `-t`, `--token`: The API token for the current session. This is returned via
+the Blink login flow
+- `-a`, `--account-id`: The account ID of the Blink account
+- `-r`, `--region`: The region of the Blink account (e.g. `u014`, `u011`, etc.)
 
 > [!NOTE]
 > The password is not provided as a command line flag for security reasons.

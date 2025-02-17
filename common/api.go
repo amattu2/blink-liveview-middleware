@@ -285,3 +285,60 @@ func VerifyPin(url string, token string, pin string) error {
 
 	return nil
 }
+
+type BaseCameraDevice struct {
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	NetworkId int    `json:"network_id"`
+	UpdatedAt string `json:"updated_at"`
+	CreatedAt string `json:"created_at"`
+	Status    string `json:"status"`
+}
+
+type BaseNetwork struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type HomescreenResponse struct {
+	Networks  []BaseNetwork      `json:"networks"`
+	Owls      []BaseCameraDevice `json:"owls"`
+	Doorbells []BaseCameraDevice `json:"doorbells"`
+}
+
+// Homescreen retrieves the homescreen information from the Blink API
+//
+// url: the URL to send the homescreen request to
+//
+// token: the API token to use for the request
+//
+// Example: Homescreen("https://example.com", "api-token-here")
+func Homescreen(url string, token string) (*HomescreenResponse, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	SetRequestHeaders(req, token)
+
+	client := &http.Client{Timeout: time.Second * 10}
+	resp, err := client.Do(req)
+	if resp.StatusCode != http.StatusOK || err != nil {
+		return nil, fmt.Errorf("HTTP Status Code %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result HomescreenResponse
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

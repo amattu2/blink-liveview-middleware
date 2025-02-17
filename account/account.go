@@ -10,40 +10,39 @@ import (
 	"golang.org/x/term"
 )
 
-// VerifyClient prompts the user for a code and verifies the client with the Blink API
+// Fetches the list of Blink devices and prints them to the console
+// Select one of the devices to start a liveview stream
 //
-// resp: the login response to use for verification
+// token: the Blink API token
 //
-// Example: VerifyClient(LoginResponse{}) = nil
-func verifyClient(resp common.LoginResponse) error {
-	fmt.Print("Code: ")
-	codeBytes, err := term.ReadPassword(int(syscall.Stdin))
+// accountId: the Blink account ID
+//
+// region: the Blink API region
+func Run(token string, accountId int, region string) {
+	baseUrl := common.GetApiUrl(region)
+	homescreenUrl := fmt.Sprintf("%s/api/v4/accounts/%d/homescreen", baseUrl, accountId)
+	devices, err := common.Homescreen(homescreenUrl, token)
 	if err != nil {
+		log.Println("error getting homescreen", err)
 		os.Exit(1)
 	}
-	code := string(codeBytes)
-	fmt.Println()
 
-	baseUrl := common.GetApiUrl(resp.Account.Tier)
-	verifyUrl := fmt.Sprintf("%s/api/v4/account/%d/client/%d/pin/verify", baseUrl, resp.Account.AccountId, resp.Account.ClientId)
-	if err := common.VerifyPin(verifyUrl, resp.Auth.Token, code); err != nil {
-		return err
+	for idx, device := range devices.Doorbells {
+		fmt.Printf("[%0d] Device: %s\n", idx, device.Name)
 	}
-
-	return nil
+	for idx, device := range devices.Owls {
+		fmt.Printf("[%0d] Device: %s\n", idx, device.Name)
+	}
 }
 
-func Run(email string, password string) {
-	if email == "" {
-		fmt.Fprintf(os.Stderr, "No email parameter provided. Please specify via --email=<email address>\n")
-		os.Exit(1)
-	}
-
-	if password == "" {
-		fmt.Fprintf(os.Stderr, "No password provided.\n")
-		os.Exit(1)
-	}
-
+// Authenticates with the Blink API using the provided email and password
+// and fetches the list of Blink devices
+// Select one of the devices to start a liveview stream
+//
+// email: the Blink account email address
+//
+// password: the Blink account password
+func RunWithCredentials(email string, password string) {
 	fingerprint, err := common.GetFingerprint("")
 	if err != nil {
 		log.Println("error getting fingerprint", err)
@@ -58,8 +57,18 @@ func Run(email string, password string) {
 
 	if resp.Account.ClientVerificationRequired {
 		log.Println("Client verification is required. A SMS code has been sent to your phone.")
-		if err := verifyClient(*resp); err != nil {
-			log.Println("error verifying client")
+		fmt.Print("Code: ")
+		codeBytes, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			os.Exit(1)
+		}
+		code := string(codeBytes)
+		fmt.Println()
+
+		baseUrl := common.GetApiUrl(resp.Account.Tier)
+		verifyUrl := fmt.Sprintf("%s/api/v4/account/%d/client/%d/pin/verify", baseUrl, resp.Account.AccountId, resp.Account.ClientId)
+		if err := common.VerifyPin(verifyUrl, resp.Auth.Token, code); err != nil {
+			log.Println("error verifying pin", err)
 			os.Exit(1)
 		}
 	}
@@ -68,9 +77,7 @@ func Run(email string, password string) {
 		log.Println("error saving the fingerprint. Next login will require a new SMS code.", err)
 	}
 
-	log.Println("Logged in successfully")
+	log.Printf("Logged in successfully. Token: %s, AccountID: %d, Region: %s\n", resp.Auth.Token, resp.Account.AccountId, resp.Account.Tier)
 
-	// TODO: Fetch all devices and prompt user to select one
-
-	// TODO: Begin live view for selected device
+	Run(resp.Auth.Token, resp.Account.AccountId, resp.Account.Tier)
 }
