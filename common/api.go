@@ -174,3 +174,167 @@ func StopCommand(url string, token string) error {
 
 	return nil
 }
+
+type LoginBody struct {
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	UniqueId   string `json:"unique_id"`
+	ClientType string `json:"client_type"`
+	DeviceId   string `json:"device_identifier"`
+	OsVersion  string `json:"os_version"`
+	ClientName string `json:"client_name"`
+	Reauth     bool   `json:"reauth"`
+}
+
+type LoginResponse struct {
+	Account struct {
+		AccountId                  int    `json:"account_id"`
+		ClientId                   int    `json:"client_id"`
+		Tier                       string `json:"tier"`
+		ClientVerificationRequired bool   `json:"client_verification_required"`
+	} `json:"account"`
+	Auth struct {
+		Token string `json:"token"`
+	} `json:"auth"`
+}
+
+// Login logs in to the Blink API using the provided credentials
+//
+// email: the email address to use for login
+//
+// password: the password to use for login
+//
+// fp: the fingerprint to use for login
+//
+// Example: Login("https://example.com/", "x", "y", &Fingerprint{New: true})
+func Login(url string, email string, password string, fp *Fingerprint) (*LoginResponse, error) {
+	jsonBody, _ := json.Marshal(&LoginBody{
+		Email:      email,
+		Password:   password,
+		UniqueId:   fp.Value,
+		ClientType: "android",
+		DeviceId:   "Google Pixel 7 Pro, BlinkLiveviewMiddleware",
+		OsVersion:  "14.0",
+		ClientName: "blink-liveview-middleware",
+		Reauth:     !fp.New,
+	})
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("content-type", "application/json; charset=UTF-8")
+
+	client := &http.Client{Timeout: time.Second * 10}
+	resp, err := client.Do(req)
+	if resp.StatusCode != http.StatusOK || err != nil {
+		return nil, fmt.Errorf("HTTP Status Code %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result LoginResponse
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+type VerifyPinBody struct {
+	Pin string `json:"pin"`
+}
+
+type VerifyPinResponse struct {
+}
+
+// VerifyPin will post the provided pin to the verification URL
+//
+// url: the URL to send the verification request to
+//
+// token: the API token to use for the request
+//
+// pin: the pin to verify
+//
+// Example: VerifyPin("https://example.com", "api-token-here", "123456") // returns nil
+func VerifyPin(url string, token string, pin string) error {
+	jsonBody, _ := json.Marshal(&VerifyPinBody{
+		Pin: pin,
+	})
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return err
+	}
+
+	SetRequestHeaders(req, token)
+
+	client := &http.Client{Timeout: time.Second * 10}
+	resp, err := client.Do(req)
+	if resp.StatusCode != http.StatusOK || err != nil {
+		return fmt.Errorf("HTTP Status Code %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+type BaseCameraDevice struct {
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	NetworkId int    `json:"network_id"`
+}
+
+type BaseNetwork struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type HomescreenResponse struct {
+	Networks  []BaseNetwork      `json:"networks"`
+	Owls      []BaseCameraDevice `json:"owls"`
+	Doorbells []BaseCameraDevice `json:"doorbells"`
+}
+
+// Homescreen retrieves the homescreen information from the Blink API
+//
+// url: the URL to send the homescreen request to
+//
+// token: the API token to use for the request
+//
+// Example: Homescreen("https://example.com", "api-token-here")
+func Homescreen(url string, token string) (*HomescreenResponse, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	SetRequestHeaders(req, token)
+
+	client := &http.Client{Timeout: time.Second * 10}
+	resp, err := client.Do(req)
+	if resp.StatusCode != http.StatusOK || err != nil {
+		return nil, fmt.Errorf("HTTP Status Code %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result HomescreenResponse
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

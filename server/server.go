@@ -11,12 +11,12 @@ import (
 	"time"
 )
 
-func Run(address *string, env *string) {
-	server := &http.Server{Addr: *address}
+func Run(address string, env string) {
+	server := &http.Server{Addr: address}
 
 	http.HandleFunc("/liveview", handlers.WebsocketHandler)
 
-	if *env == "development" {
+	if env == "development" {
 		log.Println("Enabled static file server")
 		http.Handle("/", http.FileServer(http.Dir("./static")))
 	}

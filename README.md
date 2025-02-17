@@ -1,11 +1,12 @@
 # Introduction
 
 This project offers access into the liveview functionality of the Blink Smart
-Security cameras. It has two entrypoints:
+Security cameras. It has three entrypoints:
 
 - A WebSocket service that can act as middleware between a web application and
 the Blink Smart Security Camera
-- A CLI command to watch the liveview stream from the command line (ffmpeg)
+- A command to login to a Blink account and list the cameras available for liveview
+- A command to watch the liveview stream from the command line (ffmpeg)
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/amattu2/blink-liveview-middleware)](https://goreportcard.com/report/github.com/amattu2/blink-liveview-middleware)
 [![Test](https://github.com/amattu2/blink-liveview-middleware/actions/workflows/test.yml/badge.svg)](https://github.com/amattu2/blink-liveview-middleware/actions/workflows/test.yml)
@@ -18,21 +19,64 @@ These sections provide instructions on usage without compiling the code yourself
 If you would like to compile the code yourself, see the
 Building From Source section below.
 
+```bash
+go run main.go <command> [flags]
+```
+
 > [!WARNING]
 > Prior to running any of the commands, ensure that you have ffmpeg installed
 > on your system, and configured in your PATH (if applicable).
 
-## Liveview Command
+## Account Command
 
-The liveview command is a simple tool that uses ffplay (ffmpeg) to watch the
-liveview stream from a Blink Smart Security Camera. It's primarily used for testing,
-but can be used as a standalone tool if desired.
+The account command is a simple interface for interacting with the Blink Liveview
+APIs without retrieving technical connection details on your own. Provide the email
+address and password for the Blink account you wish to use, and the command will
+perform the necessary steps to obtain the API token and account information.
 
-Upon running the command, you should see a new window open with the liveview stream.
-The stream will be gracefully closed by terminating the CLI process.
+Once retrieved, it will prompt you to select a camera to watch the liveview stream
+from, and then open the liveview stream in a new window using ffplay.
+
+Additionally, the command will output the API Token, Account ID, and Region, which
+can be used to shortcut the process in the future.
 
 ```bash
-go run cmd/liveview/main.go \
+go run main.go account \
+    [--email=<email>] \
+    [--token=<api token> --account-id=<account id> --region=<region>]
+```
+
+An explanation of the command line flags is provided below:
+
+Option 1: Email & Password
+
+- `-e`, `--email`: The email address of the Blink account to use
+
+> [!NOTE]
+> The password is not provided as a command line flag for security reasons.
+> You will be prompted to enter the password after running the command.
+
+Option 2: API Token, Account ID, & Region
+
+- `-t`, `--token`: The API token for the current session. This is returned via
+the Blink login flow
+- `-a`, `--account-id`: The account ID of the Blink account
+- `-r`, `--region`: The region of the Blink account (e.g. `u014`, `u011`, etc.)
+
+## Liveview Command
+
+The liveview command is a direct way to watch the liveview stream from a Blink
+Smart Security Camera. It can be used in place of the above "account command"
+if you already have all of the necessary information to connect to the Blink API.
+
+This is made available primarily used for testing, but can be used as
+a standalone tool if desired.
+
+Upon running the command, you should see a new ffplay window open with the
+liveview stream. The stream will be gracefully closed by terminating the CLI process.
+
+```bash
+go run main.go liveview \
   --region=<region> \
   --token=<api token> \
   --device-type=<device type> \
@@ -43,14 +87,14 @@ go run cmd/liveview/main.go \
 
 An explanation of the command line flags is provided below:
 
-- `--region`: The region of the Blink account (e.g. `u014`, `u011`, etc.). This
-is returned via the Blink login flow
-- `--token`: The API token for the current session. This is also returned via
+- `-r`, `--region`: The region of the Blink account (e.g. `u014`, `u011`, etc.).
+This is returned via the Blink login flow
+- `-t`, `--token`: The API token for the current session. This is also returned via
 the Blink login flow
-- `--device-type`: The type of (camera) device to connect to (e.g. `owl`, `doorbell`).
-- `--account-id`: The account ID of the Blink account
-- `--network-id`: The ID of the network that the camera is on
-- `--camera-id`: The ID of the camera to watch
+- `-d`, `--device-type`: The type of (camera) device to connect to (e.g. `owl`, `doorbell`).
+- `-a`, `--account-id`: The account ID of the Blink account
+- `-n`, `--network-id`: The ID of the network that the camera is on
+- `-c`, `--camera-id`: The ID of the camera to watch
 
 ## WebSocket Middleware
 
@@ -76,13 +120,13 @@ without overlapping.
 Start the server with the following command:
 
 ```bash
-go run cmd/server/main.go [--address=<addr>] [--env=<env>]
+go run main.go server [--address=<addr>] [--env=<env>]
 ```
 
 An explanation of the command line flags is provided below:
 
-- `--address`: The address to bind the server to (e.g. `:8080`)
-- `--env`: The environment to run the server in (`development`, `production`).
+- `-a`, `--address`: The address to bind the server to (e.g. `:8080`)
+- `-e`, `--env`: The environment to run the server in (`development`, `production`).
 If `production` is specified, the demo UI will be disabled.
 
 Then open the sample web application in your browser. Provide the necessary
@@ -155,10 +199,7 @@ of how to connect and integrate the liveview stream into your web application.
 ## Building From Source
 
 ```bash
-# Server binary (Windows)
-go build -a -o bin/server.exe cmd/server/main.go
-# Liveview binary (Windows)
-go build -a -o bin/liveview.exe cmd/liveview/main.go
+go build -a -o bin/blink-liveview-middleware.exe main.go
 ```
 
 # Blink Liveview Process
