@@ -2,9 +2,12 @@ package account
 
 import (
 	"blink-liveview-websocket/common"
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"os/signal"
 	"syscall"
 
 	"golang.org/x/term"
@@ -27,11 +30,67 @@ func Run(token string, accountId int, region string) {
 		os.Exit(1)
 	}
 
-	for idx, device := range devices.Doorbells {
-		fmt.Printf("[%0d] Device: %s\n", idx, device.Name)
+	fmt.Println("Select a device to start a liveview stream:")
+	options := common.PrintDeviceOptions(devices)
+	if len(options) == 0 {
+		log.Println("no devices found")
+		os.Exit(1)
 	}
-	for idx, device := range devices.Owls {
-		fmt.Printf("[%0d] Device: %s\n", idx, device.Name)
+
+getDevice:
+	fmt.Print("Device number: ")
+	var deviceNumber int
+	if _, err = fmt.Scanln(&deviceNumber); err != nil {
+		log.Println("error reading device number", err)
+		os.Exit(1)
+	}
+	fmt.Println()
+
+	if deviceNumber < 1 || deviceNumber > len(options) {
+		log.Println("invalid device number")
+		goto getDevice
+	}
+
+	device := options[deviceNumber-1]
+	log.Printf("Selected device: %s\n", device.FormattedName)
+
+	ffplayCmd := exec.Command("ffplay",
+		"-f", "mpegts",
+		"-err_detect", "ignore_err",
+		"-window_title", "Blink Liveview Middleware",
+		"-",
+	)
+	inputPipe, err := ffplayCmd.StdinPipe()
+	if err != nil {
+		log.Println("error creating ffplay stdin pipe", err)
+	}
+
+	if err := ffplayCmd.Start(); err != nil {
+		log.Println("error starting ffplay", err)
+	}
+	defer ffplayCmd.Process.Kill()
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		log.Println("Received SIGINT")
+		cancelCtx()
+	}()
+
+	common.Livestream(ctx, common.AccountDetails{
+		Region:     region,
+		Token:      token,
+		DeviceType: device.DeviceType,
+		AccountId:  accountId,
+		NetworkId:  device.NetworkId,
+		CameraId:   device.DeviceId,
+	}, inputPipe)
+
+	inputPipe.Close()
+	if err := ffplayCmd.Wait(); err != nil {
+		log.Println("error waiting for ffplay", err)
 	}
 }
 
