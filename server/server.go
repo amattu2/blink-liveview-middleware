@@ -8,10 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"time"
 )
 
-func Run(address string, env string) {
+func Run(address string, env string, origins []string) {
 	server := &http.Server{Addr: address}
 
 	http.HandleFunc("/liveview", handlers.WebsocketHandler)
@@ -19,6 +20,19 @@ func Run(address string, env string) {
 	if env == "development" {
 		log.Println("Enabled static file server")
 		http.Handle("/", http.FileServer(http.Dir("./static")))
+	}
+
+	if len(origins) > 0 {
+		log.Println("Enabled custom WebSocket origins", origins)
+		handlers.SetCheckOrigin(func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+
+			if origins[0] == "*" {
+				return true
+			}
+
+			return slices.Contains(origins, origin)
+		})
 	}
 
 	go func() {
