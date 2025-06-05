@@ -205,3 +205,11 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		cancelCtx()
 	}
 }
+
+// SetCheckOrigin sets the function to check the origin of the WebSocket connection
+// This is useful for allowing connections from specific origins
+//
+// Example usage: handlers.SetCheckOrigin(func(r *http.Request) bool { return true })
+func SetCheckOrigin(f func(r *http.Request) bool) {
+	upgrader.CheckOrigin = f
+}

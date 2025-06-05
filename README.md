@@ -120,7 +120,7 @@ without overlapping.
 Start the server with the following command:
 
 ```bash
-go run main.go server [--address=<addr>] [--env=<env>]
+go run main.go server [--address=<addr>] [--env=<env>] [--origins=<origins>]
 ```
 
 An explanation of the command line flags is provided below:
@@ -128,6 +128,8 @@ An explanation of the command line flags is provided below:
 - `-a`, `--address`: The address to bind the server to (e.g. `:8080`)
 - `-e`, `--env`: The environment to run the server in (`development`, `production`).
 If `production` is specified, the demo UI will be disabled.
+- `-o`, `--origins`: A comma-separated list of allowed WebSocket client origins.
+By default, the current origin is allowed. Use `*` to allow all origins.
 
 Then open the sample web application in your browser. Provide the necessary
 authentication information on the demo UI and click the "Start Liveview" button:
