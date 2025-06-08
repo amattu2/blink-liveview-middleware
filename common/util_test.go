@@ -34,11 +34,18 @@ func TestGetLiveviewPathOwl(t *testing.T) {
 	assert.Equal(t, err, nil)
 }
 
+func TestGetLiveviewPathHawk(t *testing.T) {
+	path, err := common.GetLiveviewPath("hawk")
+
+	assert.Equal(t, "%s/api/v2/accounts/%d/networks/%d/owls/%d/liveview", path)
+	assert.Equal(t, err, nil)
+}
+
 func TestGetLiveviewPathDoorbell(t *testing.T) {
 	path, err := common.GetLiveviewPath("doorbell")
 
-	assert.Equal(t, "", path)
-	assert.NotEqual(t, err, nil)
+	assert.Equal(t, "%s/api/v2/accounts/%d/networks/%d/doorbells/%d/liveview", path)
+	assert.Equal(t, err, nil)
 }
 
 func TestGetLiveviewPathLotus(t *testing.T) {
