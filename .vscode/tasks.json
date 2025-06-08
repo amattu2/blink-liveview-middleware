@@ -4,7 +4,7 @@
     {
       "label": "Websocket Server (DEV)",
       "type": "shell",
-      "command": "go run cmd/server/main.go --address=:8080 --env=development",
+      "command": "go run main.go server --address=:8080 --env=development --origins=*",
       "problemMatcher": []
     }
   ]

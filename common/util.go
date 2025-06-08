@@ -32,6 +32,7 @@ func GetLiveviewPath(deviceType string) (string, error) {
 	case "camera":
 		return "%s/api/v5/accounts/%d/networks/%d/cameras/%d/liveview", nil
 	case "owl":
+	case "hawk":
 		return "%s/api/v2/accounts/%d/networks/%d/owls/%d/liveview", nil
 	case "doorbell":
 	case "lotus":
