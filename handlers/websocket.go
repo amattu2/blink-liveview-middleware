@@ -43,7 +43,8 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	camera_id, _ := strconv.Atoi(data["camera_id"].(string))
 	device_type := data["camera_type"].(string)
 
-	ffmpegCmd := exec.Command("ffmpeg",
+	// FFmpeg command to process raw video stream
+	streamCmd := exec.Command("ffmpeg",
 		"-i", "pipe:0", // Read from stdin
 		"-c:v", "libx264", // Use H.264 codec for video
 		"-preset", "ultrafast", // Use ultrafast preset for low latency
@@ -60,24 +61,46 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 		"pipe:1", // Output to stdout
 	)
 
-	inputPipe, err := ffmpegCmd.StdinPipe()
-	if err != nil {
-		log.Println("error creating ffplay stdin pipe", err)
+	streamIn, streamInErr := streamCmd.StdinPipe()
+	streamOut, streamOutErr := streamCmd.StdoutPipe()
+	if streamInErr != nil || streamOutErr != nil {
+		log.Println("error creating ffmpeg stream pipes", streamInErr, streamOutErr)
+		return
 	}
-	defer inputPipe.Close()
+	defer streamIn.Close()
+	defer streamOut.Close()
 
-	outputPipe, err := ffmpegCmd.StdoutPipe()
-	if err != nil {
-		log.Println("error creating ffplay stdout pipe", err)
+	if err := streamCmd.Start(); err != nil {
+		log.Println("error starting ffmpeg stream command", err)
+		return
 	}
-	defer outputPipe.Close()
+	defer streamCmd.Process.Kill()
 
-	if err := ffmpegCmd.Start(); err != nil {
-		log.Println("error starting ffplay", err)
+	// FFmpeg command to generate thumbnails from the raw video stream
+	thumbCmd := exec.Command("ffmpeg",
+		"-i", "pipe:0", // Read from stdin
+		"-vf", "fps=1/5", // TODO: make the interval configurable, currently 1 frame every 5 seconds
+		"-q:v", "2", // Set output quality
+		"-f", "image2", // Output format for images
+		"./thumbnail_%d.jpg", // TODO: Output to stdout instead of files
+	)
+
+	thumbIn, thumbInErr := thumbCmd.StdinPipe()
+	thumbOut, thumbOutErr := thumbCmd.StdoutPipe()
+	if thumbInErr != nil || thumbOutErr != nil {
+		log.Println("error creating ffmpeg thumbnail pipes", thumbInErr, thumbOutErr)
+		return
 	}
-	defer ffmpegCmd.Process.Kill()
+	defer thumbIn.Close()
+	defer thumbOut.Close()
 
-	// TODO: Handle Livestream errors and propagate them to the client
+	if err := thumbCmd.Start(); err != nil {
+		log.Println("error starting ffmpeg thumbnail command", err)
+	}
+	defer thumbCmd.Process.Kill()
+
+	// TODO: Handle common.Livestream errors and propagate them to the client
+	// The client currently has no idea if the livestream internally failed
 	go common.Livestream(ctx, common.AccountDetails{
 		Region:     region,
 		Token:      token,
@@ -85,13 +108,19 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 		AccountId:  account_id,
 		NetworkId:  network_id,
 		CameraId:   camera_id,
-	}, inputPipe)
+	}, streamIn)
 
-	// Tell the client that the liveview has started
+	// Communicate the start and stop of the liveview to the client
 	c.WriteJSON(CommandMessage{
 		Command: "liveview:start",
 		Data: map[string]interface{}{
 			"message": "Liveview started",
+		},
+	})
+	defer c.WriteJSON(CommandMessage{
+		Command: "liveview:stop",
+		Data: map[string]interface{}{
+			"message": "Liveview stopped",
 		},
 	})
 
@@ -101,7 +130,7 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 
 		// Read from the pipe and write to the WebSocket connection
 		for {
-			n, err := outputPipe.Read(buf)
+			n, err := streamOut.Read(buf)
 			if err != nil {
 				if err != io.EOF {
 					log.Printf("Error reading from pipe: %v", err)
@@ -114,6 +143,12 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 				break
 			}
 
+			// TODO: write only if classification is enabled
+			if _, err := thumbIn.Write(buf[:n]); err != nil {
+				log.Printf("Error writing to thumbnail pipe: %v", err)
+				break
+			}
+
 			// Flush the buffer
 			buf = make([]byte, BUFFER_SIZE)
 		}
@@ -123,17 +158,14 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	<-ctx.Done()
 
 	// Wait for the ffmpeg command to finish
-	if err := ffmpegCmd.Wait(); err != nil {
-		log.Println("error waiting for ffplay", err)
+	if err := streamCmd.Wait(); err != nil {
+		log.Println("error waiting for ffmpeg stream command", err)
 	}
 
-	// Tell the client that the liveview has stopped
-	c.WriteJSON(CommandMessage{
-		Command: "liveview:stop",
-		Data: map[string]interface{}{
-			"message": "Liveview stopped. Context cancelled",
-		},
-	})
+	// Wait for the thumbnail command to finish
+	if err := thumbCmd.Wait(); err != nil {
+		log.Println("error waiting for ffmpeg thumbnail command", err)
+	}
 }
 
 // WebsocketHandler handles WebSocket connections from clients and performs upgrades
