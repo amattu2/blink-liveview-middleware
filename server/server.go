@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func Run(address string, env string, origins []string) {
+func Run(address string, env string, origins []string, classificationEnabled bool, classificationInterval int) {
 	server := &http.Server{Addr: address}
 
 	http.HandleFunc("/liveview", handlers.WebsocketHandler)
@@ -33,6 +33,14 @@ func Run(address string, env string, origins []string) {
 
 			return slices.Contains(origins, origin)
 		})
+	}
+
+	if classificationEnabled {
+		log.Println("Enabled classification on interval", classificationInterval, "seconds")
+		handlers.SetClassificationEnabled(true)
+		handlers.SetClassificationInterval(time.Duration(classificationInterval) * time.Second)
+	} else {
+		handlers.SetClassificationEnabled(false)
 	}
 
 	go func() {

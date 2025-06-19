@@ -1,12 +1,17 @@
 # Introduction
 
-This project offers access into the liveview functionality of the Blink Smart
-Security cameras. It has three entrypoints:
+This project offers direct access into the liveview functionality of the Blink Smart
+Security cameras with three core entrypoints:
 
 - A WebSocket service that can act as middleware between a web application and
 the Blink Smart Security Camera
 - A command to login to a Blink account and list the cameras available for liveview
 - A command to watch the liveview stream from the command line (ffmpeg)
+
+**NEW!**: the WebSocket middleware service provides optional classification
+of the liveview stream, which can be used to help
+label key entities (people, packages, etc).
+See the [WebSocket Middleware](#websocket-middleware) section for details.
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/amattu2/blink-liveview-middleware)](https://goreportcard.com/report/github.com/amattu2/blink-liveview-middleware)
 [![Test](https://github.com/amattu2/blink-liveview-middleware/actions/workflows/test.yml/badge.svg)](https://github.com/amattu2/blink-liveview-middleware/actions/workflows/test.yml)
@@ -129,7 +134,21 @@ An explanation of the command line flags is provided below:
 - `-e`, `--env`: The environment to run the server in (`development`, `production`).
 If `production` is specified, the demo UI will be disabled.
 - `-o`, `--origins`: A comma-separated list of allowed WebSocket client origins.
-By default, the current origin is allowed. Use `*` to allow all origins.
+By default, only the current origin is allowed. Use `*` to allow all origins.
+- `--classification-enabled`: Allow users to request stream classification
+- `--classification-interval`: The interval at which to re-classify the stream
+and update the current labels
+
+> [!WARNING]
+> Enabling classification with a low interval will be extremely costly. Strongly
+> recommend evaluating your needs and adjusting the interval accordingly. It's
+> likely that a very high interval (e.g. 30+ seconds)
+> will be sufficient for most use cases.
+>
+> The classification features are experimental and rely on Google Cloud Vision.
+> It works by collecting snapshots from the liveview stream and sending them to
+> the Google Cloud Vision API for analysis. The results are then sent back to
+> the client as labels.
 
 Then open the sample web application in your browser. Provide the necessary
 authentication information on the demo UI and click the "Start Liveview" button:
@@ -138,7 +157,7 @@ authentication information on the demo UI and click the "Start Liveview" button:
 
 > [!NOTE]
 > The server does not currently limit the maximum number of clients that can
-> connect OR liveview at the same time. This may cause performance issues.
+> connect OR initiate liveview at the same time.
 
 ### Client Usage
 
@@ -245,5 +264,4 @@ sequenceDiagram
 # Dependencies
 
 - Go 1.23+
-- Gorilla WebSocket
-- ffmpeg / ffplay
+- FFmpeg

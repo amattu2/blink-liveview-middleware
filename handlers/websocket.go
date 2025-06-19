@@ -3,6 +3,7 @@ package handlers
 import (
 	"blink-liveview-websocket/common"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -30,10 +31,16 @@ var VALID_COMMANDS = []string{
 }
 
 // The buffer size before dispatching the data to the WebSocket connection in bytes
-var BUFFER_SIZE = 4 * 1024
+var BUFFER_SIZE int = 4 * 1024
 
 // The idle timeout before closing the connection
-var IDLE_TIMEOUT = 10 * time.Second
+var IDLE_TIMEOUT time.Duration = 10 * time.Second
+
+// A flag to enable or disable classification features
+var CLASSIFICATION bool = false
+
+// The interval at which the classification is performed during liveview
+var CLASSIFICATION_INTERVAL time.Duration = 30 * time.Second
 
 func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]interface{}) {
 	region := data["account_region"].(string)
@@ -79,7 +86,7 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	// FFmpeg command to generate thumbnails from the raw video stream
 	thumbCmd := exec.Command("ffmpeg",
 		"-i", "pipe:0", // Read from stdin
-		"-vf", "fps=1/5", // TODO: make the interval configurable, currently 1 frame every 5 seconds
+		"-vf", fmt.Sprintf("fps=1/%s", CLASSIFICATION_INTERVAL.String()),
 		"-q:v", "2", // Set output quality
 		"-f", "image2", // Output format for images
 		"./thumbnail_%d.jpg", // TODO: Output to stdout instead of files
@@ -143,10 +150,12 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 				break
 			}
 
-			// TODO: write only if classification is enabled
-			if _, err := thumbIn.Write(buf[:n]); err != nil {
-				log.Printf("Error writing to thumbnail pipe: %v", err)
-				break
+			// If classification is enabled, copy to the thumbnail pipe
+			if CLASSIFICATION {
+				if _, err := thumbIn.Write(buf[:n]); err != nil {
+					log.Printf("Error writing to thumbnail pipe: %v", err)
+					break
+				}
 			}
 
 			// Flush the buffer
@@ -248,4 +257,21 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 // Example usage: handlers.SetCheckOrigin(func(r *http.Request) bool { return true })
 func SetCheckOrigin(f func(r *http.Request) bool) {
 	upgrader.CheckOrigin = f
+}
+
+// SetClassificationEnabled sets the flag to enable or disable classification features
+// This allows clients to request classification of liveview streams, but does not happen
+// automatically unless the client requests it.
+//
+// Example usage: handlers.SetClassificationEnabled(true)
+func SetClassificationEnabled(enabled bool) {
+	CLASSIFICATION = enabled
+}
+
+// SetClassificationInterval sets the interval at which the classification is performed during liveview
+// This allows re-labeling of streams at a specified interval
+//
+// Example usage: handlers.SetClassificationInterval(10 * time.Second)
+func SetClassificationInterval(interval time.Duration) {
+	CLASSIFICATION_INTERVAL = interval
 }
