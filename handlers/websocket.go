@@ -4,7 +4,6 @@ import (
 	"blink-liveview-websocket/common"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os/exec"
@@ -42,13 +41,13 @@ var CLASSIFICATION bool = false
 // The interval at which the classification is performed during liveview
 var CLASSIFICATION_INTERVAL time.Duration = 30 * time.Second
 
-func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]interface{}) {
-	region := data["account_region"].(string)
-	token := data["api_token"].(string)
-	account_id, _ := strconv.Atoi(data["account_id"].(string))
-	network_id, _ := strconv.Atoi(data["network_id"].(string))
-	camera_id, _ := strconv.Atoi(data["camera_id"].(string))
-	device_type := data["camera_type"].(string)
+func liveviewHandler(ctx context.Context, c *websocket.Conn, details map[string]any) {
+	region := details["account_region"].(string)
+	token := details["api_token"].(string)
+	account_id, _ := strconv.Atoi(details["account_id"].(string))
+	network_id, _ := strconv.Atoi(details["network_id"].(string))
+	camera_id, _ := strconv.Atoi(details["camera_id"].(string))
+	device_type := details["camera_type"].(string)
 
 	// FFmpeg command to process raw video stream
 	streamCmd := exec.Command("ffmpeg",
@@ -86,7 +85,7 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	// FFmpeg command to generate thumbnails from the raw video stream
 	thumbCmd := exec.Command("ffmpeg",
 		"-i", "pipe:0", // Read from stdin
-		"-vf", fmt.Sprintf("fps=1/%s", CLASSIFICATION_INTERVAL.String()),
+		"-vf", fmt.Sprintf("fps=1/%d", int(CLASSIFICATION_INTERVAL.Seconds())),
 		"-q:v", "2", // Set output quality
 		"-f", "image2", // Output format for images
 		"./thumbnail_%d.jpg", // TODO: Output to stdout instead of files
@@ -131,17 +130,14 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 		},
 	})
 
-	// Forward messages from the pipe to the WebSocket connection
+	// Forward messages from the processed stream to the WebSocket connection
 	go func() {
 		buf := make([]byte, BUFFER_SIZE)
 
-		// Read from the pipe and write to the WebSocket connection
 		for {
 			n, err := streamOut.Read(buf)
 			if err != nil {
-				if err != io.EOF {
-					log.Printf("Error reading from pipe: %v", err)
-				}
+				log.Printf("Error reading from ffmpeg stdout: %v", err)
 				break
 			}
 
@@ -150,11 +146,12 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 				break
 			}
 
-			// If classification is enabled, copy to the thumbnail pipe
-			if CLASSIFICATION {
+			// Forward the processed stream to the thumbnail command
+			if CLASSIFICATION { // TODO: Only if requested by the client
 				if _, err := thumbIn.Write(buf[:n]); err != nil {
-					log.Printf("Error writing to thumbnail pipe: %v", err)
-					break
+					// Log the error, but do not stop the stream
+					// This allows the liveview to continue even if thumbnail generation fails
+					log.Printf("Error writing to ffmpeg thumbnail stdin: %v", err)
 				}
 			}
 
@@ -162,6 +159,8 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 			buf = make([]byte, BUFFER_SIZE)
 		}
 	}()
+
+	// TODO: process thumbnails and send them to the client
 
 	// Wait for the context to be cancelled
 	<-ctx.Done()

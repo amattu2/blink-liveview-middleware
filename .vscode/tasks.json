@@ -2,9 +2,15 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Websocket Server (DEV)",
+      "label": "Websocket",
       "type": "shell",
       "command": "go run main.go server --address=:8080 --env=development --origins=*",
+      "problemMatcher": []
+    },
+    {
+      "label": "Websocket w/Classification",
+      "type": "shell",
+      "command": "go run main.go server --address=:8080 --env=production --origins=* --classification-enabled=true --classification-interval=5",
       "problemMatcher": []
     }
   ]
