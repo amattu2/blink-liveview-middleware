@@ -15,9 +15,8 @@ which means many clients can connect and view their own liveview stream simultan
 	Run: func(cmd *cobra.Command, args []string) {
 		origins, _ := cmd.Flags().GetStringSlice("origins")
 		classificationEnabled, _ := cmd.Flags().GetBool("classification-enabled")
-		classificationInterval, _ := cmd.Flags().GetInt("classification-interval")
 
-		server.Run(cmd.Flag("address").Value.String(), cmd.Flag("env").Value.String(), origins, classificationEnabled, classificationInterval)
+		server.Run(cmd.Flag("address").Value.String(), cmd.Flag("env").Value.String(), origins, classificationEnabled)
 	},
 }
 
@@ -28,5 +27,4 @@ func init() {
 	serverCmd.Flags().StringP("env", "e", "production", "Environment (development, production)")
 	serverCmd.Flags().StringSliceP("origins", "o", []string{}, "Allowed websocket origins (comma-separated list). Use '*' to allow all origins.")
 	serverCmd.Flags().Bool("classification-enabled", false, "Allow clients to request classification of liveview streams")
-	serverCmd.Flags().Int("classification-interval", 30, "Interval in seconds for streams to be re-labeled")
 }

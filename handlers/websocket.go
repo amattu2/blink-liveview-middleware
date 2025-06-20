@@ -3,7 +3,6 @@ package handlers
 import (
 	"blink-liveview-websocket/common"
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os/exec"
@@ -27,6 +26,7 @@ var upgrader = websocket.Upgrader{
 var VALID_COMMANDS = []string{
 	"liveview:start",
 	"liveview:stop",
+	"liveview:classify",
 }
 
 // The buffer size before dispatching the data to the WebSocket connection in bytes
@@ -38,10 +38,7 @@ var IDLE_TIMEOUT time.Duration = 10 * time.Second
 // A flag to enable or disable classification features
 var CLASSIFICATION bool = false
 
-// The interval at which the classification is performed during liveview
-var CLASSIFICATION_INTERVAL time.Duration = 30 * time.Second
-
-func liveviewHandler(ctx context.Context, c *websocket.Conn, details map[string]any) {
+func liveviewHandler(ctx context.Context, c *websocket.Conn, details map[string]any, buffer *common.CircularBuffer) {
 	region := details["account_region"].(string)
 	token := details["api_token"].(string)
 	account_id, _ := strconv.Atoi(details["account_id"].(string))
@@ -81,29 +78,6 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, details map[string]
 		return
 	}
 	defer streamCmd.Process.Kill()
-
-	// FFmpeg command to generate thumbnails from the raw video stream
-	thumbCmd := exec.Command("ffmpeg",
-		"-i", "pipe:0", // Read from stdin
-		"-vf", fmt.Sprintf("fps=1/%d", int(CLASSIFICATION_INTERVAL.Seconds())),
-		"-q:v", "2", // Set output quality
-		"-f", "image2", // Output format for images
-		"./thumbnail_%d.jpg", // TODO: Output to stdout instead of files
-	)
-
-	thumbIn, thumbInErr := thumbCmd.StdinPipe()
-	thumbOut, thumbOutErr := thumbCmd.StdoutPipe()
-	if thumbInErr != nil || thumbOutErr != nil {
-		log.Println("error creating ffmpeg thumbnail pipes", thumbInErr, thumbOutErr)
-		return
-	}
-	defer thumbIn.Close()
-	defer thumbOut.Close()
-
-	if err := thumbCmd.Start(); err != nil {
-		log.Println("error starting ffmpeg thumbnail command", err)
-	}
-	defer thumbCmd.Process.Kill()
 
 	// TODO: Handle common.Livestream errors and propagate them to the client
 	// The client currently has no idea if the livestream internally failed
@@ -146,13 +120,9 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, details map[string]
 				break
 			}
 
-			// Forward the processed stream to the thumbnail command
-			if CLASSIFICATION { // TODO: Only if requested by the client
-				if _, err := thumbIn.Write(buf[:n]); err != nil {
-					// Log the error, but do not stop the stream
-					// This allows the liveview to continue even if thumbnail generation fails
-					log.Printf("Error writing to ffmpeg thumbnail stdin: %v", err)
-				}
+			if CLASSIFICATION {
+				// Write the data to the circular buffer for classification
+				buffer.Write(buf[:n])
 			}
 
 			// Flush the buffer
@@ -160,19 +130,12 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, details map[string]
 		}
 	}()
 
-	// TODO: process thumbnails and send them to the client
-
 	// Wait for the context to be cancelled
 	<-ctx.Done()
 
 	// Wait for the ffmpeg command to finish
 	if err := streamCmd.Wait(); err != nil {
 		log.Println("error waiting for ffmpeg stream command", err)
-	}
-
-	// Wait for the thumbnail command to finish
-	if err := thumbCmd.Wait(); err != nil {
-		log.Println("error waiting for ffmpeg thumbnail command", err)
 	}
 }
 
@@ -193,6 +156,7 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	var ctx context.Context
 	var cancelCtx context.CancelFunc
+	var buffer *common.CircularBuffer
 	var lastMessage time.Time = time.Now()
 	var liveviewStarted bool = false
 	var closedClient bool = false
@@ -225,7 +189,6 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if !slices.Contains(VALID_COMMANDS, message.Command) {
-			log.Println("Invalid command received from client")
 			break
 		}
 
@@ -234,12 +197,23 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 			log.Println("Client requested liveview:start")
 
 			ctx, cancelCtx = context.WithCancel(context.Background())
-			go liveviewHandler(ctx, c, message.Data)
+			buffer = common.NewCircularBuffer(100) // TODO: Evaluate buffer size
+			go liveviewHandler(ctx, c, message.Data, buffer)
 			liveviewStarted = true
 		} else if message.Command == "liveview:stop" && liveviewStarted {
 			log.Println("Client requested liveview:stop")
 			cancelCtx()
 			liveviewStarted = false
+		} else if message.Command == "liveview:classify" && CLASSIFICATION && liveviewStarted {
+			log.Println("Client requested liveview:classify")
+			// TODO: Implement classification logic
+			c.WriteJSON(CommandMessage{
+				Command: "liveview:classify_response", // TODO: name this command properly
+				Data: map[string]any{
+					"message": "Classification response message",
+					"labels":  []string{"label1", "label2"}, // Example labels
+				},
+			})
 		}
 	}
 
@@ -265,12 +239,4 @@ func SetCheckOrigin(f func(r *http.Request) bool) {
 // Example usage: handlers.SetClassificationEnabled(true)
 func SetClassificationEnabled(enabled bool) {
 	CLASSIFICATION = enabled
-}
-
-// SetClassificationInterval sets the interval at which the classification is performed during liveview
-// This allows re-labeling of streams at a specified interval
-//
-// Example usage: handlers.SetClassificationInterval(10 * time.Second)
-func SetClassificationInterval(interval time.Duration) {
-	CLASSIFICATION_INTERVAL = interval
 }

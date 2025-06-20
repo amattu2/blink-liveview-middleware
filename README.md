@@ -137,15 +137,8 @@ If `production` is specified, the demo UI will be disabled.
 - `-o`, `--origins`: A comma-separated list of allowed WebSocket client origins.
 By default, only the current origin is allowed. Use `*` to allow all origins.
 - `--classification-enabled`: Allow users to request stream classification
-- `--classification-interval`: The interval at which to re-classify the stream
-and update the current labels
 
 > [!WARNING]
-> Enabling classification with a low interval will be extremely costly. Strongly
-> recommend evaluating your needs and adjusting the interval accordingly. It's
-> likely that a very high interval (e.g. 30+ seconds)
-> will be sufficient for most use cases.
->
 > The classification features are experimental and rely on Google Cloud Vision.
 > It works by collecting snapshots from the liveview stream and sending them to
 > the Google Cloud Vision API for analysis. The results are then sent back to

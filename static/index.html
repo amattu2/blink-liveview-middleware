@@ -32,6 +32,7 @@
       <button id="open">Open</button>
       <button id="close" disabled>Close</button>
       <button id="toggle-liveview" disabled>Start Liveview</button>
+      <button id="classify-stream" disabled>Request Classification</button>
     </div>
     <div>
       <h2>Connection Credentials</h2>
@@ -105,6 +106,7 @@
     const toggleButtons = (state) => {
       document.getElementById("open").disabled = !state;
       document.getElementById("toggle-liveview").disabled = state;
+      document.getElementById("classify-stream").disabled = state;
       document.getElementById("close").disabled = state;
       toggleLiveview(false);
     };
@@ -198,6 +200,21 @@
         return false;
       }
       ws.close();
+      return false;
+    };
+
+    document.getElementById("classify-stream").onclick = function (evt) {
+      if (!ws || !liveviewActive) {
+        return false;
+      }
+
+      const form = document.querySelector("form");
+      const data = {
+        command: "liveview:classify",
+        data: {},
+      };
+      ws.send(JSON.stringify(data));
+      print("SENT: " + JSON.stringify(data));
       return false;
     };
 

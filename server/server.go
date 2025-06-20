@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func Run(address string, env string, origins []string, classificationEnabled bool, classificationInterval int) {
+func Run(address string, env string, origins []string, classificationEnabled bool) {
 	server := &http.Server{Addr: address}
 
 	http.HandleFunc("/liveview", handlers.WebsocketHandler)
@@ -36,9 +36,8 @@ func Run(address string, env string, origins []string, classificationEnabled boo
 	}
 
 	if classificationEnabled {
-		log.Println("Enabled classification on interval", classificationInterval, "seconds")
+		log.Println("Enabled stream classification requests")
 		handlers.SetClassificationEnabled(true)
-		handlers.SetClassificationInterval(time.Duration(classificationInterval) * time.Second)
 	} else {
 		handlers.SetClassificationEnabled(false)
 	}
