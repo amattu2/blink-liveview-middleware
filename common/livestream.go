@@ -58,15 +58,8 @@ func Livestream(ctx context.Context, account AccountDetails, writer io.Writer) e
 	go PollCommand(ctx, fmt.Sprintf("%s/network/%d/command/%d", baseUrl, account.NetworkId, resp.CommandId), account.Token, resp.PollingInterval)
 	defer StopCommand(fmt.Sprintf("%s/network/%d/command/%d/done", baseUrl, account.NetworkId, resp.CommandId), account.Token)
 
-	// Get the connection details
-	connectionDetails, err := ParseConnectionString(resp.Server)
-	if err != nil {
-		log.Println("Error parsing connection string", err)
-		return err
-	}
-
 	// Connect to the liveview server
-	if err := TCPStream(ctx, *connectionDetails, writer); err != nil {
+	if err := TCPStream(ctx, resp.Server, writer); err != nil {
 		log.Println("TCPStream error:", err)
 		return err
 	}
