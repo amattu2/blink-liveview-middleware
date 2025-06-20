@@ -5,6 +5,6 @@ docs/
 *.ini
 *.gch
 *.exe
-.env
 
 fingerprint.txt
+credentials.json

@@ -1,7 +1,7 @@
 # Introduction
 
-This project offers direct access into the liveview functionality of the Blink Smart
-Security cameras with three core entrypoints:
+This is a stand-alone Golang project that offers direct access into the liveview
+functionality of the Blink Smart Security cameras using three core entrypoints:
 
 - A WebSocket service that can act as middleware between a web application and
 the Blink Smart Security Camera
@@ -126,6 +126,7 @@ Start the server with the following command:
 
 ```bash
 go run main.go server [--address=<addr>] [--env=<env>] [--origins=<origins>]
+    \ [--classification-enabled] [--classification-interval=<seconds>] [--credential-file=<path>]
 ```
 
 An explanation of the command line flags is provided below:
