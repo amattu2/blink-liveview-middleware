@@ -230,7 +230,7 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		lastMessage = time.Now()
-		if message.Command == "liveview:start" {
+		if message.Command == "liveview:start" && !liveviewStarted {
 			log.Println("Client requested liveview:start")
 
 			ctx, cancelCtx = context.WithCancel(context.Background())
