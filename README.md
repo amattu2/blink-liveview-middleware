@@ -200,8 +200,34 @@ of how to connect and integrate the liveview stream into your web application.
 
 ## Building From Source
 
+Using make, you can build the project for your platform. The Makefile
+provides a simple interface for building the project, but you can also
+build it manually using the `go build` command.
+
+To build the project using make for all platforms, run the following command:
+
 ```bash
-go build -a -o bin/blink-liveview-middleware.exe main.go
+make build
+```
+
+To build a specific platform, use the `build_[platform]` target.
+
+```bash
+make build_[platform]
+```
+
+Platforms: `linux`, `mac`, `freebsd`, `windows`
+
+To build the project manually, you can use the `go build` command. The
+
+```bash
+go build -a -o bin/file_name_here main.go
+```
+
+To clean the workspace and remove any generated files, run:
+
+```bash
+make clean
 ```
 
 # Blink Liveview Process
