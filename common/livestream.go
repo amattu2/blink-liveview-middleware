@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 )
 
 type AccountDetails struct {
@@ -40,18 +39,15 @@ func Livestream(ctx context.Context, account AccountDetails, writer io.Writer) e
 	baseUrl := GetApiUrl(account.Region)
 	liveViewPath, err := GetLiveviewPath(account.DeviceType)
 	if err != nil {
-		log.Println("Error getting liveview path", err)
-		return err
+		return fmt.Errorf("error getting liveview path: %w", err)
 	}
 
 	// Tell Blink we want to start a liveview session
 	resp, err := BeginLiveview(fmt.Sprintf(liveViewPath, baseUrl, account.AccountId, account.NetworkId, account.CameraId), account.Token)
 	if err != nil {
-		log.Println("Error starting liveview session", err)
-		return err
+		return fmt.Errorf("error starting liveview session: %w", err)
 	} else if resp == nil || resp.CommandId == 0 {
-		log.Println("Error sending liveview command", resp)
-		return fmt.Errorf("error sending liveview command")
+		return fmt.Errorf("error sending liveview command: %v", resp)
 	}
 
 	// Poll the liveview command to keep the connection alive
@@ -61,14 +57,12 @@ func Livestream(ctx context.Context, account AccountDetails, writer io.Writer) e
 	// Get the connection details
 	connectionDetails, err := ParseConnectionString(resp.Server)
 	if err != nil {
-		log.Println("Error parsing connection string", err)
-		return err
+		return fmt.Errorf("connection string parsing error: %w", err)
 	}
 
 	// Connect to the liveview server
 	if err := TCPStream(ctx, *connectionDetails, writer); err != nil {
-		log.Println("TCPStream error:", err)
-		return err
+		return fmt.Errorf("TCPStream error: %w", err)
 	}
 
 	<-ctx.Done()

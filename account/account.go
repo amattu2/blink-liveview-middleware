@@ -81,14 +81,17 @@ getDevice:
 		cancelCtx()
 	}()
 
-	common.Livestream(ctx, common.AccountDetails{
+	accountDetails := common.AccountDetails{
 		Region:     region,
 		Token:      token,
 		DeviceType: device.DeviceType,
 		AccountId:  accountId,
 		NetworkId:  device.NetworkId,
 		CameraId:   device.DeviceId,
-	}, inputPipe)
+	}
+	if err := common.Livestream(ctx, accountDetails, inputPipe); err != nil {
+		log.Println("error starting liveview session", err)
+	}
 
 	inputPipe.Close()
 	if err := ffplayCmd.Wait(); err != nil {
