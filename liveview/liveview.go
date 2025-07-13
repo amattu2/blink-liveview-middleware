@@ -35,14 +35,17 @@ func Run(region string, token string, deviceType string, accountId int, networkI
 		cancelCtx()
 	}()
 
-	common.Livestream(ctx, common.AccountDetails{
+	accountDetails := common.AccountDetails{
 		Region:     region,
 		Token:      token,
 		DeviceType: deviceType,
 		AccountId:  accountId,
 		NetworkId:  networkId,
 		CameraId:   cameraId,
-	}, inputPipe)
+	}
+	if err := common.Livestream(ctx, accountDetails, inputPipe); err != nil {
+		log.Println("error during livestream", err)
+	}
 
 	inputPipe.Close()
 	if err := ffplayCmd.Wait(); err != nil {

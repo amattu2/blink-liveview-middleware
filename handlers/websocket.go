@@ -73,15 +73,20 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	}
 	defer ffmpegCmd.Process.Kill()
 
-	// TODO: Handle Livestream errors and propagate them to the client
-	go common.Livestream(ctx, common.AccountDetails{
-		Region:     region,
-		Token:      token,
-		DeviceType: device_type,
-		AccountId:  account_id,
-		NetworkId:  network_id,
-		CameraId:   camera_id,
-	}, inputPipe)
+	go func() {
+		err := common.Livestream(ctx, common.AccountDetails{
+			Region:     region,
+			Token:      token,
+			DeviceType: device_type,
+			AccountId:  account_id,
+			NetworkId:  network_id,
+			CameraId:   camera_id,
+		}, inputPipe)
+		if err != nil {
+			log.Println("error starting liveview session", err)
+			// TODO: Notify the client about the error
+		}
+	}()
 
 	// Tell the client that the liveview has started
 	c.WriteJSON(CommandMessage{
