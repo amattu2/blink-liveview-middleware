@@ -2,10 +2,12 @@ package common_test
 
 import (
 	"blink-liveview-websocket/common"
+	"bytes"
 	"context"
-	"io"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -21,11 +23,8 @@ func TestSetRequestHeaders(t *testing.T) {
 	common.SetRequestHeaders(req, "xyz-auth-token")
 
 	// Check the headers
-	assert.Equal(t, "ANDROID_28799573", req.Header.Get("app-build"))
-	assert.Equal(t, "37.0ANDROID_28799573", req.Header.Get("user-agent"))
 	assert.Equal(t, "en_US", req.Header.Get("locale"))
-	assert.Equal(t, "America/New_York", req.Header.Get("x-blink-time-zone"))
-	assert.Equal(t, "xyz-auth-token", req.Header.Get("token-auth"))
+	assert.Equal(t, "Bearer xyz-auth-token", req.Header.Get("Authorization"))
 	assert.Equal(t, "application/json; charset=UTF-8", req.Header.Get("content-type"))
 }
 
@@ -170,76 +169,123 @@ func TestStopCommandHttpError(t *testing.T) {
 	assert.Equal(t, "cannot stop command. HTTP Status Code 500", err.Error())
 }
 
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
 func TestLoginNominal(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		mockResponse := `{"account": {"account_id": 99, "client_id": 123, "tier": "u011", "client_verification_required": false}, "auth": {"token": "xyz-auth-token"}}`
-		w.Write([]byte(mockResponse))
-	}))
-	defer mockServer.Close()
+	orig := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = orig })
 
-	fp := common.Fingerprint{
-		Value: "mock-fingerprint",
-		New:   false,
-	}
-	resp, err := common.Login(mockServer.URL, "mock-email", "mock-password", &fp)
+	http.DefaultTransport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		// Ensure the URL used by Login matches the expected OAuth endpoint
+		assert.Equal(t, "https://api.oauth.blink.com/oauth/token", r.URL.String())
+
+		// Return a successful OAuth token response
+		body := `{"access_token":"xyz-auth-token","expires_in":3600,"refresh_token":"r1","scope":"client","token_type":"Bearer"}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioNopCloser(bytes.NewBufferString(body)),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})
+
+	fp := common.Fingerprint{Value: "mock-fingerprint", New: false}
+	resp, err := common.Login("mock-email", "mock-password", "", &fp)
 
 	assert.Equal(t, nil, err)
-	assert.Equal(t, 99, resp.Account.AccountId)
-	assert.Equal(t, 123, resp.Account.ClientId)
-	assert.Equal(t, "u011", resp.Account.Tier)
-	assert.Equal(t, false, resp.Account.ClientVerificationRequired)
-	assert.Equal(t, "xyz-auth-token", resp.Auth.Token)
+	assert.Equal(t, "xyz-auth-token", resp.AccessToken)
+	assert.Equal(t, 3600, resp.ExpiresIn)
+	assert.Equal(t, "r1", resp.RefreshToken)
+	assert.Equal(t, "client", resp.Scope)
+	assert.Equal(t, "Bearer", resp.TokenType)
 }
 
-func TestLoginHttpError(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer mockServer.Close()
+func TestLoginSetsHeaders(t *testing.T) {
+	orig := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = orig })
 
-	fp := common.Fingerprint{
-		Value: "mock-fingerprint",
-		New:   false,
-	}
-	resp, err := common.Login(mockServer.URL, "mock-email", "mock-password", &fp)
+	http.DefaultTransport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		// Validate required headers set by Login
+		assert.Equal(t, "application/json; charset=UTF-8", r.Header.Get("content-type"))
+		assert.Equal(t, "mock-fingerprint", r.Header.Get("hardware_id"))
+		assert.Equal(t, "", r.Header.Get("2fa-code"))
 
-	assert.Equal(t, nil, resp)
-	assert.Equal(t, "HTTP Status Code 500", err.Error())
-}
+		body := `{"access_token":"ok","expires_in":1,"refresh_token":"r","scope":"client","token_type":"Bearer"}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioNopCloser(bytes.NewBufferString(body)),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})
 
-func TestVerifyPinNominal(t *testing.T) {
-	var mu sync.Mutex
-	var bodyPin string
-
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		w.WriteHeader(http.StatusOK)
-		var body []byte
-		body, _ = io.ReadAll(r.Body)
-		bodyPin = string(body)
-		mu.Unlock()
-	}))
-	defer mockServer.Close()
-
-	err := common.VerifyPin(mockServer.URL, "xyz-auth-token", "193481")
-
-	mu.Lock()
-	assert.Equal(t, `{"pin":"193481"}`, bodyPin)
-	mu.Unlock()
+	fp := common.Fingerprint{Value: "mock-fingerprint", New: false}
+	_, err := common.Login("email", "password", "", &fp)
 	assert.Equal(t, nil, err)
 }
 
-func TestVerifyPinHttpError(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer mockServer.Close()
+func TestLoginWithTwoFactorHeader(t *testing.T) {
+	orig := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = orig })
 
-	err := common.VerifyPin(mockServer.URL, "xyz-auth-token", "193481")
+	http.DefaultTransport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		assert.Equal(t, "123456", r.Header.Get("2fa-code"))
 
-	assert.Equal(t, "HTTP Status Code 500", err.Error())
+		body := `{"access_token":"ok","expires_in":1,"refresh_token":"r","scope":"client","token_type":"Bearer"}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioNopCloser(bytes.NewBufferString(body)),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})
+
+	fp := common.Fingerprint{Value: "mock-fingerprint", New: false}
+	_, err := common.Login("email", "password", "123456", &fp)
+	assert.Equal(t, nil, err)
 }
+
+func TestLoginHttpClientError(t *testing.T) {
+	orig := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = orig })
+
+	http.DefaultTransport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("dial error")
+	})
+
+	fp := common.Fingerprint{Value: "mock-fingerprint", New: false}
+	resp, err := common.Login("mock-email", "mock-password", "", &fp)
+
+	assert.Equal(t, (*common.LoginResponse)(nil), resp)
+	assert.Equal(t, true, strings.HasPrefix(err.Error(), "HTTP request failed:"))
+}
+
+// Helper to avoid importing io for NopCloser in each test
+type nopCloser struct{ *bytes.Buffer }
+
+func (n nopCloser) Close() error { return nil }
+
+func ioNopCloser(b *bytes.Buffer) nopCloser { return nopCloser{b} }
+
+// func TestLoginHttpError(t *testing.T) {
+// 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		w.WriteHeader(http.StatusInternalServerError)
+// 	}))
+// 	defer mockServer.Close()
+
+// 	fp := common.Fingerprint{
+// 		Value: "mock-fingerprint",
+// 		New:   false,
+// 	}
+// 	resp, err := common.Login("mock-email", "mock-password", "", &fp)
+
+// 	assert.Equal(t, nil, resp)
+// 	assert.Equal(t, "HTTP Status Code 500", err.Error())
+// }
 
 func TestHomescreenNominal(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

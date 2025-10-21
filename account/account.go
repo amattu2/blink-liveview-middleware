@@ -113,14 +113,14 @@ func RunWithCredentials(email string, password string) {
 		os.Exit(1)
 	}
 
-	loginUrl := common.GetApiUrl("") + "/api/v5/account/login"
-	resp, err := common.Login(loginUrl, email, password, fingerprint)
+	loginResp, err := common.Login(email, password, "", fingerprint)
 	if err != nil {
 		log.Println("error logging in", err)
 		os.Exit(1)
 	}
 
-	if resp.Account.ClientVerificationRequired {
+	var tsvResp *common.LoginResponse
+	if loginResp.TwoStepVerification == "sms" {
 		log.Println("Client verification is required. A SMS code has been sent to your phone.")
 		fmt.Print("Code: ")
 		codeBytes, err := term.ReadPassword(int(syscall.Stdin))
@@ -130,19 +130,23 @@ func RunWithCredentials(email string, password string) {
 		code := string(codeBytes)
 		fmt.Println()
 
-		baseUrl := common.GetApiUrl(resp.Account.Tier)
-		verifyUrl := fmt.Sprintf("%s/api/v4/account/%d/client/%d/pin/verify", baseUrl, resp.Account.AccountId, resp.Account.ClientId)
-		if err := common.VerifyPin(verifyUrl, resp.Auth.Token, code); err != nil {
-			log.Println("error verifying pin", err)
+		var tsvErr error
+		if tsvResp, tsvErr = common.Login(email, password, code, fingerprint); tsvErr != nil {
+			log.Println("error verifying pin", tsvErr)
 			os.Exit(1)
 		}
+	} else {
+		log.Println("Unexpected two-step verification state:", loginResp.TwoStepVerification)
+		os.Exit(1)
 	}
+
+	tierInfo, err := common.GetTierInfo(tsvResp.AccessToken)
 
 	if err := fingerprint.Store(); err != nil {
 		log.Println("error saving the fingerprint. Next login will require a new SMS code.", err)
 	}
 
-	log.Printf("Logged in successfully. Token: %s, AccountId: %d, Region: %s\n", resp.Auth.Token, resp.Account.AccountId, resp.Account.Tier)
+	log.Printf("Logged in successfully.\n\tToken: %s,\n\tAccountId: %d,\n\tRegion: %s\n", tsvResp.AccessToken, tierInfo.AccountId, tierInfo.Tier)
 
-	Run(resp.Auth.Token, resp.Account.AccountId, resp.Account.Tier)
+	Run(tsvResp.AccessToken, tierInfo.AccountId, tierInfo.Tier)
 }
