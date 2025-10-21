@@ -16,13 +16,14 @@ import (
 //
 // token: the token to use for the request
 //
-// Example: SetRequestHeaders(req, "api-token-here")
+// Example: SetRequestHeaders(req, "bearer-token-here")
 func SetRequestHeaders(req *http.Request, token string) {
-	req.Header.Set("app-build", "ANDROID_28799573")
-	req.Header.Set("user-agent", "37.0ANDROID_28799573")
+	// req.Header.Set("app-build", "ANDROID_28799573")
+	// req.Header.Set("user-agent", "37.0ANDROID_28799573")
 	req.Header.Set("locale", "en_US")
-	req.Header.Set("x-blink-time-zone", "America/New_York")
-	req.Header.Set("token-auth", token)
+	// req.Header.Set("x-blink-time-zone", "America/New_York")
+	// req.Header.Set("token-auth", token)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("content-type", "application/json; charset=UTF-8")
 }
 
