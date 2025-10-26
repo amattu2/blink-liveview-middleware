@@ -136,6 +136,7 @@ func RunWithCredentials(email string, password string) {
 			os.Exit(1)
 		}
 	} else {
+		// TODO: Handle other TSV states or skip TSV if not required
 		log.Println("Unexpected two-step verification state:", loginResp.TwoStepVerification)
 		os.Exit(1)
 	}
