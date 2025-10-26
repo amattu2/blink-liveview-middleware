@@ -142,6 +142,10 @@ func RunWithCredentials(email string, password string) {
 	}
 
 	tierInfo, err := common.GetTierInfo(tsvResp.AccessToken)
+	if err != nil {
+		log.Println("error getting tier info", err)
+		os.Exit(1)
+	}
 
 	if err := fingerprint.Store(); err != nil {
 		log.Println("error saving the fingerprint. Next login will require a new SMS code.", err)
