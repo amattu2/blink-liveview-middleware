@@ -30,7 +30,7 @@ var VALID_COMMANDS = []string{
 }
 
 // The buffer size before dispatching the data to the WebSocket connection in bytes
-var BUFFER_SIZE = 8 * 1024
+var BUFFER_SIZE = 4 * 1024
 
 // The idle timeout before closing the connection
 var IDLE_TIMEOUT = 10 * time.Second
@@ -43,17 +43,21 @@ func liveviewHandler(ctx context.Context, c *websocket.Conn, data map[string]int
 	camera_id, _ := strconv.Atoi(data["camera_id"].(string))
 	device_type := data["camera_type"].(string)
 
-	// TODO: Strip metadata from the stream before piping it to the client
 	ffmpegCmd := exec.Command("ffmpeg",
-		"-i", "pipe:0",
-		"-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
-		// "-b:v", "1M",
-		"-c:a", "aac", "-b:a", "128k",
+		"-i", "pipe:0", // Read from stdin
+		"-c:v", "libx264", // Use H.264 codec for video
+		"-preset", "ultrafast", // Use ultrafast preset for low latency
+		"-tune", "zerolatency", // Tune for low latency
+		"-g", "30", // Set GOP size to 30 frames
+		"-keyint_min", "30", // Set minimum keyframe interval to 30 frames
+		"-sc_threshold", "0", // Disable scene change triggering new GOPs
+		"-c:a", "aac", "-b:a", "128k", // Use AAC codec for audio with 128k bitrate
 		"-movflags", "frag_keyframe+empty_moov+default_base_moof",
-		"-min_frag_duration", "500000", // 500ms fragments
-		"-fflags", "nobuffer",
-		"-flush_packets", "1", // Ensure FFmpeg writes data immediately
-		"-f", "mp4", "pipe:1", // Output to stdout
+		"-min_frag_duration", "100000", // 100ms fragments
+		"-flags", "low_delay", // Set low delay flags
+		"-flush_packets", "1", // Flush packets immediately
+		"-f", "mp4", // Output format MP4
+		"pipe:1", // Output to stdout
 	)
 
 	inputPipe, err := ffmpegCmd.StdinPipe()
